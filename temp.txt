@@ -1,0 +1,73 @@
+import { pgPool } from "../database/db.js";
+import { getCoinsFromRedis } from '../database/dbContext.js';
+import bitcoin from 'bitcoinjs-lib';
+import bip39 from 'bip39';
+import Web3 from 'web3';
+import TonWeb from 'tonweb';
+import { Connection, Keypair } from '@solana/web3.js';
+import TronWeb from 'tronweb';
+import * as dogecoin from 'dogecoinjs-lib';
+
+// Функция для создания кошельков
+async function createWallets(userId) {
+    const wallets = {};
+
+    // TON
+    const mnemonic = bip39.generateMnemonic();
+    const seed = await bip39.mnemonicToSeed(mnemonic);
+    const root = bitcoin.bip32.fromSeed(seed);
+    const path = "m/44'/0'/0'/0/0";
+    const child = root.derivePath(path);
+    const tonWeb = new TonWeb();
+    const tonKeyPair = tonWeb.utils.newKeyPair();
+    wallets.TON = {
+        address: tonWeb.utils.Address.toString(tonKeyPair.publicKey),
+        privateKey: tonKeyPair.secretKey,
+    };
+
+    // Tether (USDT) на блокчейне TON
+    const usdtTonKeyPair = tonWeb.utils.newKeyPair();
+    wallets.USDT = {
+        address: tonWeb.utils.Address.toString(usdtTonKeyPair.publicKey),
+        privateKey: usdtTonKeyPair.secretKey,
+    };
+
+    // NOT на блокчейне TON
+    const notTonKeyPair = tonWeb.utils.newKeyPair();
+    wallets.NOT = {
+        address: tonWeb.utils.Address.toString(notTonKeyPair.publicKey),
+        privateKey: notTonKeyPair.secretKey,
+    };
+
+    // Bitcoin (BTC)
+    const btcMnemonic = bip39.generateMnemonic();
+    const btcSeed = await bip39.mnemonicToSeed(btcMnemonic);
+    const btcRoot = bitcoin.bip32.fromSeed(btcSeed);
+    const btcPath = "m/44'/0'/0'/0/0";
+    const btcChild = btcRoot.derivePath(btcPath);
+    const { address } = bitcoin.payments.p2pkh({ pubkey: btcChild.publicKey });
+    wallets.BTC = {
+        address: address,
+        privateKey: btcChild.toWIF(),
+    };
+
+    // Ethereum (ETH)
+    const ethMnemonic = bip39.generateMnemonic();
+    const ethSeed = await bip39.mnemonicToSeed(ethMnemonic);
+    const ethRoot = bitcoin.bip32.fromSeed(ethSeed);
+    const ethPath = "m/44'/60'/0'/0/0";
+    const ethChild = ethRoot.derivePath(ethPath);
+    const ethAccount = new Web3.eth.accounts.privateKeyToAccount(ethChild.toWIF());
+    wallets.ETH = {
+        address: ethAccount.address,
+        privateKey: ethAccount.privateKey,
+    };
+
+    // Solana (SOL)
+    const solanaMnemonic = bip39.generateMnemonic();
+    const solanaSeed = await bip39.mnemonicToSeed(solanaMnemonic);
+    const solanaRoot = bitcoin.bip32.fromSeed(solanaSeed);
+    const solanaPath = "m/44'/501'/0'/0/0";
+    const solanaChild = solanaRoot.derivePath(solanaPath);
+    const solanaKeyPair = Keypair.fromSecretKey(solanaChild.toWIF());
+    wallets.SOL
