@@ -1,0 +1,116 @@
+Пользователи (users)
+id (primary key, integer)
+telegram_id (integer, уникальный идентификатор пользователя в Telegram)
+
+Валюты (currencies)
+id (primary key, integer)
+symbol (string, e.g. "USD", "EUR", etc.)
+name (string, e.g. "Доллар США", "Евро", etc.)
+description (string)
+
+Криптовалюты (coins)
+id (primary key, integer)
+name (string, e.g. "Bitcoin", "Ethereum", etc.)
+logo (string, URL-адрес логотипа)
+symbol (string, e.g. "BTC", "ETH", etc.)
+network (string, e.g. "Bitcoin", "Ethereum", etc.)
+
+Балансы пользователей (user_balances)
+id (primary key, integer)
+user_id (foreign key, references users.id)
+coin_id (foreign key, references coins.id)
+balance (decimal, баланс пользователя по конкретной криптовалюте)
+
+Транзакции (transactions)
+id (primary key, integer)
+user_id (foreign key, references users.id)
+coin_id (foreign key, references coins.id)
+amount (decimal, сумма транзакции)
+type (string, тип транзакции: "deposit", "withdrawal", "exchange")
+timestamp (timestamp, время транзакции)
+
+Курсы обмена (exchange_rates)
+id (primary key, integer)
+coin_id (foreign key, references coins.id)
+currency_id (foreign key, references currencies.id)
+rate (decimal, курс обмена)
+
+Индексы
+Создать индекс на поле telegram_id в таблице users для быстрого поиска пользователей по их Telegram ID.
+Создать индекс на поле user_id в таблице user_balances для быстрого поиска балансов пользователей.
+Создать индекс на поле coin_id в таблице user_balances для быстрого поиска балансов по конкретной криптовалюте.
+Создать индекс на поле user_id в таблице transactions для быстрого поиска транзакций пользователя.
+Создать индекс на поле coin_id в таблице transactions для быстрого поиска транзакций по конкретной криптовалюте.
+Кэш в Redis
+Хранить балансы пользователей в Redis для быстрого доступа к ним.
+Хранить курсы обмена в Redis для быстрого доступа к ним.
+Использовать Redis для кэширования результатов запросов к базе данных для уменьшения нагрузки на базу данных.
+Оптимизация
+Использовать connection pooling для уменьшения времени подключения к базе данных.
+Использовать prepared statements для уменьшения времени выполнения запросов.
+Использовать индексы для уменьшения времени поиска данных в базе данных.
+Использовать Redis для кэширования результатов запросов для уменьшения нагрузки на базу данных.
+Эта структура базы данных и кэша в Redis должна обеспечить быстрый и эффективный доступ к данным, а также уменьшить нагрузку на базу данных.
+
+//
+// // все константы в проекте требующие хранения в базе данных
+//
+// const coins = [
+//     { id: 1, name: 'Toncoin', logo: './toncoin.png', symbol: 'TON', network: 'The Open Network(TON)' },
+//     { id: 2, name: 'Tether', logo: './tether.png', symbol: 'USDT', network: 'The Open Network(TON)' },
+//     { id: 3, name: 'Notcoin', logo: './notcoin.png', symbol: 'NOT', network: 'The Open Network(TON)' },
+//     { id: 4, name: 'Bitcoin', logo: './bitcoin.png', symbol: 'BTC', network: 'Bitcoin' },
+//     { id: 5, name: 'Ethereum', logo: './etherium.png', symbol: 'ETH', network: 'Ethereum' },
+//     { id: 6, name: 'Solana', logo: './solana.png', symbol: 'SOL', network: 'Solana' },
+//     { id: 7, name: 'TRON', logo: './tron.png', symbol: 'TRX', network: 'TRON' },
+//     { id: 8, name: 'Dogecoin', logo: './dogecoin.png', symbol: 'DOGE', network: 'DOGE' },
+// ];
+//
+// const currencies = [
+//     { symbol: '₽', name: 'RUB', description: 'Российский рубль' },
+//     { symbol: '$', name: 'USD', description: 'Доллар США' },
+//     { symbol: '€', name: 'EUR', description: 'Евро' },
+//     { symbol: 'Br', name: 'BYN', description: 'Белорусский рубль' },
+//     { symbol: '₴', name: 'UAH', description: 'Украинская гривна' },
+//     { symbol: '£', name: 'GBP', description: 'Британский фунт' },
+//     { symbol: '¥', name: 'CNY', description: 'Китайский юань' },
+//     { symbol: '₸', name: 'KZT', description: 'Казахстанский тенге' },
+//     { symbol: 'сум', name: 'UZS', description: 'Узбекский сум' },
+//     { symbol: '₾', name: 'GEL', description: 'Грузинский лари' },
+//     { symbol: '₺', name: 'TRY', description: 'Турецкая лира' },
+//     { symbol: '֏', name: 'AMD', description: 'Армянский драм' },
+//     { symbol: '฿', name: 'THB', description: 'Таиландский бат' },
+//     { symbol: '₹', name: 'INR', description: 'Индийская рупия' },
+//     { symbol: 'R$', name: 'BRL', description: 'Бразильский реал' },
+//     { symbol: 'Rp', name: 'IDR', description: 'Индонезийская рупия' },
+//     { symbol: '₼', name: 'AZN', description: 'Азербайджанский манат' },
+//     { symbol: 'د.إ', name: 'AED', description: 'Объединенные Арабские Эмираты дирхам' },
+//     { symbol: 'zł', name: 'PLN', description: 'Польский злотый' },
+//     { symbol: '₪', name: 'ILS', description: 'Израильский шекель' },
+//     { symbol: 'с', name: 'KGS', description: 'Киргизский сом' },
+//     { symbol: 'ЅМ', name: 'TJS', description: 'Таджикский сомони' },
+// ];
+//
+// const userBalances = {
+//     TON: 1,
+//     USDT: 500,
+//     NOT: 80,
+//     BTC: 0.00015,
+//     ETH: 0.003,
+//     SOL: 0.01,
+//     TRX: 1000,
+//     DOGE: 7,
+// };
+//
+//
+// const Comission = {
+//     TON: 0.09,
+//     USDT: 1,
+//     NOT: 80,
+//     BTC: 0.00015,
+//     ETH: 0.003,
+//     SOL: 0.01,
+//     TRX: 10,
+//     DOGE: 7,
+// };
+//

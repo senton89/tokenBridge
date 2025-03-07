@@ -1,0 +1,37 @@
+// c:\Users\sento\WebstormProjects\cryptobricclient\src\components\p2p\AdDetailsPage.jsx
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+
+const AdDetailsPage = () => {
+    // ... (весь код из AdDetailsPage.jsx)
+};
+
+export default AdDetailsPage;
+
+// ===============================================
+
+// c:\Users\sento\WebstormProjects\cryptobricclient\src\components\p2p\AnnouncementPage.jsx
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+
+const AnnouncementPage = () => {
+    // ... (весь код из AnnouncementPage.jsx)
+};
+
+export default AnnouncementPage;
+
+// ===============================================
+
+// c:\Users\sento\WebstormProjects\cryptobricclient\src\components\p2p\BuyPage.jsx
+import React, { useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+
+const BuyPage = () => {
+    // ... (весь код из BuyPage.jsx)
+};
+
+export default BuyPage;
+
+// ===============================================
+
+// (Продолжаем для всех остальных файлов из папки p2p)
