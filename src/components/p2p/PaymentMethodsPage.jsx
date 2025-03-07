@@ -1,40 +1,83 @@
-import React, { useState } from 'react';
+import React, {useEffect, useState} from 'react';
+import { p2pApi } from '../../services/api';
 
 const PaymentMethodsPage = () => {
-    const [paymentMethods, setPaymentMethods] = useState([
-        { id: 1, name: 'Сбербанк', details: '1234 5678 9012 3456', active: true },
-        { id: 2, name: 'Тинькофф', details: '9876 5432 1098 7654', active: true },
-        { id: 3, name: 'QIWI', details: '+7 999 123 45 67', active: false }
-    ]);
-    
+    const [paymentMethods, setPaymentMethods] = useState([]);
     const [showAddForm, setShowAddForm] = useState(false);
     const [newMethod, setNewMethod] = useState({ name: '', details: '' });
-    
-    const toggleMethodStatus = (id) => {
-        setPaymentMethods(methods => 
-            methods.map(method => 
-                method.id === id ? { ...method, active: !method.active } : method
-            )
-        );
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    useEffect(() => {
+        fetchPaymentMethods();
+    }, []);
+
+    const fetchPaymentMethods = async () => {
+        try {
+            setLoading(true);
+            const response = await p2pApi.getPaymentMethods();
+            setPaymentMethods(response.data);
+            setLoading(false);
+        } catch (err) {
+            setError('Не удалось загрузить способы оплаты');
+            console.error('Error fetching payment methods:', err);
+            setLoading(false);
+        }
     };
-    
-    const deleteMethod = (id) => {
-        setPaymentMethods(methods => methods.filter(method => method.id !== id));
+    const toggleMethodStatus = async (id) => {
+        try {
+            const method = paymentMethods.find(m => m.id === id);
+            if (!method) return;
+
+            await p2pApi.updatePaymentMethod(id, {
+                ...method,
+                active: !method.active
+            });
+
+            // Обновляем локальное состояние
+            setPaymentMethods(methods =>
+                methods.map(method =>
+                    method.id === id ? { ...method, active: !method.active } : method
+                )
+            );
+        } catch (err) {
+            setError('Не удалось обновить статус способа оплаты');
+            console.error('Error updating payment method status:', err);
+        }
     };
-    
-    const handleAddMethod = () => {
+
+    const deleteMethod = async (id) => {
+        try {
+            await p2pApi.deletePaymentMethod(id);
+            // Обновляем локальное состояние
+            setPaymentMethods(methods => methods.filter(method => method.id !== id));
+        } catch (err) {
+            setError('Не удалось удалить способ оплаты');
+            console.error('Error deleting payment method:', err);
+        }
+    };
+
+    const handleAddMethod = async () => {
         if (newMethod.name && newMethod.details) {
-            setPaymentMethods([
-                ...paymentMethods, 
-                { 
-                    id: Date.now(), // Используем timestamp как временный id
+            try {
+                const response = await p2pApi.addPaymentMethod({
                     name: newMethod.name,
                     details: newMethod.details,
                     active: true
-                }
-            ]);
-            setNewMethod({ name: '', details: '' });
-            setShowAddForm(false);
+                });
+
+                // Добавляем новый метод в локальное состояние
+                setPaymentMethods([
+                    ...paymentMethods,
+                    response.data
+                ]);
+
+                setNewMethod({ name: '', details: '' });
+                setShowAddForm(false);
+            } catch (err) {
+                setError('Не удалось добавить способ оплаты');
+                console.error('Error adding payment method:', err);
+            }
         }
     };
     

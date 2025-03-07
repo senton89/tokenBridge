@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { mockBuyListings, mockSellListings, availablePaymentMethods } from '../../data/mockListings';
+import {listingsApi, p2pApi} from '../../services/api';
 
 const AnnouncementPage = () => {
     const navigate = useNavigate();
@@ -11,17 +11,7 @@ const AnnouncementPage = () => {
     const editMode = location.state?.editMode || false;
     const adToEdit = location.state?.ad || null;
 
-    const coins = [
-        { id: 1, name: 'Toncoin', logo: './toncoin.png', symbol: 'TON' },
-        { id: 2, name: 'Tether', logo: './tether.png', symbol: 'USDT' },
-        { id: 3, name: 'Notcoin', logo: './notcoin.png', symbol: 'NOT' },
-        { id: 4, name: 'Bitcoin', logo: './bitcoin.png', symbol: 'BTC' },
-        { id: 5, name: 'Ethereum', logo: './etherium.png', symbol: 'ETH' },
-        { id: 6, name: 'Solana', logo: './solana.png', symbol: 'SOL' },
-        { id: 7, name: 'TRON', logo: './tron.png', symbol: 'TRX' },
-        { id: 8, name: 'Dogecoin', logo: './dogecoin.png', symbol: 'DOGE' },
-    ];
-
+    const [coins, setCoins] = useState([]);
     const [isFixedPrice, setIsFixedPrice] = useState(false);
     const [priceType, setPriceType] = useState('Плавающая');
     const [isBuy, setIsBuy] = useState(initialAdType === 'buy');
@@ -40,6 +30,17 @@ const AnnouncementPage = () => {
     const [terms, setTerms] = useState('');
     const [autoReply, setAutoReply] = useState('');
 
+    useEffect(() => {
+        const fetchCoins = async () => {
+            try {
+                const response = await listingsApi.getCoins();
+                setCoins(response.data);
+            } catch (error) {
+                console.error(error);
+            }
+        };
+        fetchCoins();
+    }, []);
 
     // Устанавливаем начальный тип объявления на основе переданных параметров
     useEffect(() => {
@@ -132,60 +133,41 @@ const AnnouncementPage = () => {
     };
 
     // Функция для создания нового объявления
-    const createNewListing = () => {
-        // Создаем новое объявление на основе введенных данных
-        const newListing = {
-            id: adToEdit?.id || Date.now(), // Используем существующий ID или создаем новый
-            advertiser: 'Ваше имя', // В реальном приложении это будет имя пользователя
-            completedDeals: adToEdit?.completedDeals || 0,
-            completionRate: adToEdit?.completionRate || 100,
-            price: isFixedPrice ? parseFloat(price) : 97.50, // Используем введенную цену или рыночную
-            crypto: selectedCurrency,
-            currency: 'RUB', // Пока используем только RUB
-            minAmount: minAmount ? parseFloat(minAmount) : 500,
-            maxAmount: maxAmount ? parseFloat(maxAmount) : null,
-            paymentMethods: selectedPaymentMethods.length > 0 ? selectedPaymentMethods : ['Тинькофф', 'Сбербанк'],
-            status: 'active', // По умолчанию объявление активно
-            roundAmount: roundAmount,
-            paymentTime: paymentTime,
-            terms: terms,
-            autoReply: autoReply,
-            type: isBuy ? 'buy' : 'sell',
-            available: amount ? parseFloat(amount) : 0,
-            user: {
-                name: 'Ваше имя',
-                deals: adToEdit?.user?.deals || 0,
-                rating: adToEdit?.user?.rating || 100
-            }
-        };
+    const createNewListing = async () => {
+        try {
+            // Создаем новое объявление на основе введенных данных
+            const newListing = {
+                type: isBuy ? 'buy' : 'sell',
+                crypto: selectedCurrency,
+                currency: 'RUB', // Пока используем только RUB
+                price: isFixedPrice ? parseFloat(price) : null,
+                pricePercent: !isFixedPrice ? parseFloat(percent) : null,
+                available: amount ? parseFloat(amount) : 0,
+                minAmount: minAmount ? parseFloat(minAmount) : null,
+                maxAmount: maxAmount ? parseFloat(maxAmount) : null,
+                paymentMethods: selectedPaymentMethods,
+                roundAmount: roundAmount,
+                paymentTime: paymentTime,
+                terms: terms,
+                autoReply: autoReply
+            };
 
-        // Сохраняем объявление (в реальном приложении это будет отправка на сервер)
-        // Здесь мы просто имитируем сохранение
-        if (editMode) {
-            // Обновляем существующее объявление
-            if (isBuy) {
-                const index = mockBuyListings.findIndex(ad => ad.id === adToEdit.id);
-                if (index !== -1) {
-                    mockBuyListings[index] = newListing;
-                }
+            if (editMode && adToEdit) {
+                // Обновляем существующее объявление
+                await p2pApi.updateAd(adToEdit.id, newListing);
             } else {
-                const index = mockSellListings.findIndex(ad => ad.id === adToEdit.id);
-                if (index !== -1) {
-                    mockSellListings[index] = newListing;
-                }
+                // Добавляем новое объявление
+                await p2pApi.createAd(newListing);
             }
-        } else {
-            // Добавляем новое объявление
-            if (isBuy) {
-                mockBuyListings.unshift(newListing);
-            } else {
-                mockSellListings.unshift(newListing);
-            }
+
+            // Перенаправляем на страницу с объявлениями
+            navigate('/p2p/my-ads', { state: { newListing: true } });
+        } catch (error) {
+            console.error('Error creating/updating ad:', error);
+            // Здесь можно добавить обработку ошибок, например, показать уведомление
         }
-
-        // Перенаправляем на страницу с объявлениями
-        navigate('/p2p/my-ads', { state: { newListing: true } });
     };
+
 
     // Функция для перехода к следующему шагу
     const handleNextStep = () => {

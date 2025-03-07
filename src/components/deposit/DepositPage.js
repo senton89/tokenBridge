@@ -1,21 +1,58 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { QRCodeCanvas } from 'qrcode.react';
-
-const coins = [
-    { id: 1, name: 'Toncoin', logo: './toncoin.png', symbol: 'TON', network: 'The Open Network(TON)' },
-    { id: 2, name: 'Tether', logo: './tether.png', symbol: 'USDT', network: 'The Open Network(TON)' },
-    { id: 3, name: 'Notcoin', logo: './notcoin.png', symbol: 'NOT', network: 'The Open Network(TON)' },
-    { id: 4, name: 'Bitcoin', logo: './bitcoin.png', symbol: 'BTC', network: 'Bitcoin' },
-    { id: 5, name: 'Ethereum', logo: './etherium.png', symbol: 'ETH', network: 'Ethereum' },
-    { id: 6, name: 'Solana', logo: './solana.png', symbol: 'SOL', network: 'Solana' },
-    { id: 7, name: 'TRON', logo: './tron.png', symbol: 'TRX', network: 'TRON' },
-    { id: 8, name: 'Dogecoin', logo: './dogecoin.png', symbol: 'DOGE', network: 'DOGE' },
-];
+import {listingsApi, walletApi} from '../../services/api';
 
 const DepositPage = () => {
     const location = useLocation();
     const { currency } = location.state || {};
+    const [coins, setCoins] = useState([]);
+    const [depositAddress, setDepositAddress] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    useEffect(() => {
+        const fetchCoins = async () => {
+            try {
+                setLoading(true);
+                const response = await listingsApi.getCoins();
+                setCoins(response.data);
+            } catch (err) {
+                console.error('Error fetching coins:', err);
+                setError('Не удалось загрузить список монет');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchCoins();
+    }, []); // Добавлен пустой массив зависимостей
+
+
+    useEffect(() => {
+        if (currency) {
+            fetchDepositAddress();
+        }
+    }, [currency]);
+
+    const fetchDepositAddress = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            const response = await walletApi.getDepositAddress(currency);
+
+            if (response.data && response.data.address) {
+                setDepositAddress(response.data.address);
+            } else {
+                throw new Error('Адрес не получен');
+            }
+        } catch (err) {
+            setError('Не удалось получить адрес для депозита. Пожалуйста, попробуйте позже.');
+            console.error('Error fetching deposit address:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const qrCodeData = `https://example.com/deposit/${currency}`;
     const qrCodeOptions = {
@@ -74,9 +111,7 @@ const DepositPage = () => {
                     Transaction Address
                 </p>
                 <p className="text-white font-mono mt-2">
-                    UQCXJvvom3Z1GuOUVYnDYU6e1862
-                    <br/>
-                    WHR9ZI9HeuECW113d1T
+                    {depositAddress}
                 </p>
             </div>
             <div className="flex justify-center space-x-2 mb-4 mt-6">

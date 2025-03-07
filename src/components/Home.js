@@ -1,127 +1,112 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import { useNavigate, useLocation } from 'react-router-dom';
-
-const userBalances = {
-    TON: 1,
-    USDT: 1500,
-    NOT: 80,
-    BTC: 0.00015,
-    ETH: 0.003,
-    SOL: 0.01,
-    TRX: 1000,
-    DOGE: 7,
-};
-
-const coins = [
-    { id: 1, name: 'Toncoin', logo: './toncoin.png', symbol: 'TON' },
-    { id: 2, name: 'Tether', logo: './tether.png', symbol: 'USDT' },
-    { id: 3, name: 'Notcoin', logo: './notcoin.png', symbol: 'NOT' },
-    { id: 4, name: 'Bitcoin', logo: './bitcoin.png', symbol: 'BTC' },
-    { id: 5, name: 'Ethereum', logo: './etherium.png', symbol: 'ETH' },
-    { id: 6, name: 'Solana', logo: './solana.png', symbol: 'SOL' },
-    { id: 7, name: 'TRON', logo: './tron.png', symbol: 'TRX' },
-    { id: 8, name: 'Dogecoin', logo: './dogecoin.png', symbol: 'DOGE' },
-];
-
-const currencies = [
-    { id: 1, name: 'Российский рубль', symbol: 'RUB', icon: '₽' },
-    { id: 2, name: 'Доллар США', symbol: 'USD', icon: '$' },
-    { id: 3, name: 'Евро', symbol: 'EUR', icon: '€' },
-    { id: 4, name: 'Белорусский рубль', symbol: 'BYN', icon: 'Br' },//не работает
-    { id: 5, name: 'Украинская гривна', symbol: 'UAH', icon: '₴' },
-    { id: 6, name: 'Британский фунт', symbol: 'GBP', icon: '£' },
-    { id: 7, name: 'Китайский юань', symbol: 'CNY', icon: '¥' },//не работает
-    { id: 8, name: 'Казахстанский тенге', symbol: 'KZT', icon: '₸' },
-    { id: 9, name: 'Узбекский сум', symbol: 'UZS', icon: 'сум' },//не работает
-    { id: 10, name: 'Грузинский лари', symbol: 'GEL', icon: '₾' },
-    { id: 11, name: 'Турецкая лира', symbol: 'TRY', icon: '₺' },
-    { id: 12, name: 'Армянский драм', symbol: 'AMD', icon: '֏' },//не работает
-    { id: 13, name: 'Таиландский бат', symbol: 'THB', icon: '฿' },
-    { id: 14, name: 'Индийская рупия', symbol: 'INR', icon: '₹' },
-    { id: 15, name: 'Бразильский реал', symbol: 'BRL', icon: 'R$' },
-    { id: 16, name: 'Индонезийская рупия', symbol: 'IDR', icon: 'Rp' },
-    { id: 17, name: 'Азербайджанский манат', symbol: 'AZN', icon: '₼' },//не работает
-    { id: 18, name: 'Объединенные Арабские Эмираты дирхам', symbol: 'AED', icon: 'د.إ' },
-    { id: 19, name: 'Польский злотый', symbol: 'PLN', icon: 'zł' },
-    { id: 20, name: 'Израильский шекель', symbol: 'ILS', icon: '₪' },
-    { id: 21, name: 'Киргизский сом', symbol: 'KGS', icon: 'с' },//не работает
-    { id: 22, name: 'Таджикский сомони', symbol: 'TJS', icon: 'ЅМ' },//не работает
-];
-
-const api_url = 'https://min-api.cryptocompare.com';
-
-const getCoinPrice = async (coin_id, currency) => {
-    try {
-        const response = await axios.get(`${api_url}/data/price`, {
-            params: {
-                fsym: coin_id,
-                tsyms: currency,
-            },
-        });
-        const data = response.data;
-        const price = data[currency];
-        if (price === undefined) {
-            const priceFromCoincap = await getCoinPriceFromCoincap(coin_id, currency);
-            return priceFromCoincap;
-        }
-        return price;
-    } catch (error) {
-        console.error(error);
-    }
-};
-
-const getCoinPriceChange = async (coin_id, currency) => {
-    try {
-        const response = await axios.get(`${api_url}/data/histohour`, {
-            params: {
-                fsym: coin_id,
-                tsym: currency,
-                limit: 24,
-            },
-        });
-        const data = response.data;
-        const prices = data.Data;
-        const currentPrice = prices[prices.length - 1].close;
-        const previousPrice = prices[prices.length - 2].close;
-        const priceChange = (currentPrice - previousPrice) / previousPrice * 100;
-        return priceChange;
-    } catch (error) {
-        console.error(error);
-    }
-};
-
-const getCoinPriceFromCoincap = async (coin_id, currency) => {
-    try {
-        const response = await axios.get(`https://api.coincap.io/v2/rates`);
-        const data = response.data;
-        const coin = data.data.find((coin) => coin.symbol === coin_id);
-        const price = coin.rateUsd;
-        return price;
-    } catch (error) {
-        console.error(error);
-    }
-};
+import { walletApi, marketApi } from '../services/api';
+import {listingsApi} from "../services/api";
 
 function Home() {
     const [prices, setPrices] = useState({});
     const [priceChanges, setPriceChanges] = useState({});
+    const [userBalances, setUserBalances] = useState({});
     const [currentCurrency, setCurrentCurrency] = useState('USD');
-    const [hideSmallBalances, setHideSmallBalances] = useState(false); // Состояние для фильтра
-    const [hideAmounts, setHideAmounts] = useState(false); // Состояние для отображения сумм валют пользователя
-
-    const toggleHideAmounts = () => {
-        setHideAmounts((prev) => !prev); // Переключаем состояние отображения сумм валют пользователя
-    };
+    const [hideSmallBalances, setHideSmallBalances] = useState(false);
+    const [hideAmounts, setHideAmounts] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [coins, setCoins] = useState([]);
+    const [currencies, setCurrencies] = useState([]);
 
     const navigate = useNavigate();
     const location = useLocation();
 
     useEffect(() => {
+        fetchCoins()
+    }, []);
+
+    const fetchCoins = async () => {
+        try {
+            const response = await listingsApi.getCoins();
+            setCoins(response.data);
+        } catch (err) {
+            setError('Не удалось загрузить список монет');
+            console.error('Error fetching coins:', err);
+        }
+    };
+
+    useEffect(() => {
+        fetchCurrencies()
+    }, []);
+
+    const fetchCurrencies = async () => {
+        try {
+            const response = await listingsApi.getCurrencies();
+            setCurrencies(response.data);
+        } catch (err) {
+            setError('Не удалось загрузить список монет');
+            console.error('Error fetching coins:', err);
+        }
+    };
+
+    // Загрузка баланса пользователя
+    useEffect(() => {
+        fetchUserBalance();
+    }, []);
+
+    const fetchUserBalance = async () => {
+        try {
+            setLoading(true);
+            const response = await walletApi.getBalance();
+            setUserBalances(response.data);
+            setLoading(false);
+        } catch (err) {
+            setError('Не удалось загрузить баланс');
+            console.error('Error fetching balance:', err);
+            setLoading(false);
+        }
+    };
+
+    // Загрузка цен криптовалют
+    useEffect(() => {
+        const fetchPrices = async () => {
+            try {
+                // Получаем список символов криптовалют
+                const cryptoSymbols = Object.keys(userBalances);
+
+                // Получаем цены
+                const pricesResponse = await marketApi.getPrices({
+                    currencies: cryptoSymbols,
+                    baseCurrency: currentCurrency
+                });
+                setPrices(pricesResponse.data);
+
+                // Получаем изменения цен
+                const changesResponse = await marketApi.getPriceChanges({
+                    currencies: cryptoSymbols,
+                    baseCurrency: currentCurrency
+                });
+                setPriceChanges(changesResponse.data);
+            } catch (err) {
+                console.error('Error fetching prices:', err);
+            }
+        };
+
+        if (Object.keys(userBalances).length > 0) {
+            fetchPrices();
+
+            // Обновляем цены каждые 30 секунд
+            const intervalId = setInterval(fetchPrices, 30000);
+            return () => clearInterval(intervalId);
+        }
+    }, [userBalances, currentCurrency]);
+
+    const toggleHideAmounts = () => {
+        setHideAmounts((prev) => !prev); // Переключаем состояние отображения сумм валют пользователя
+    };
+
+    useEffect(() => {
         if (location.state?.currentCurrency) {
             setCurrentCurrency(location.state.currentCurrency);
         }
-    }, [location.state?.currentCurrency]);
+    }, [location.state]);
 
     const handleCoinList = (type) => {
         navigate('/coinlist', {

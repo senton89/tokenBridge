@@ -1,35 +1,41 @@
-import React, {useEffect} from 'react';
+import React, {useEffect, useState} from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-
-const currencies = [
-    { symbol: '₽', name: 'RUB', description: 'Российский рубль' },
-    { symbol: '$', name: 'USD', description: 'Доллар США' },
-    { symbol: '€', name: 'EUR', description: 'Евро' },
-    { symbol: 'Br', name: 'BYN', description: 'Белорусский рубль' },
-    { symbol: '₴', name: 'UAH', description: 'Украинская гривна' },
-    { symbol: '£', name: 'GBP', description: 'Британский фунт' },
-    { symbol: '¥', name: 'CNY', description: 'Китайский юань' },
-    { symbol: '₸', name: 'KZT', description: 'Казахстанский тенге' },
-    { symbol: 'сум', name: 'UZS', description: 'Узбекский сум' },
-    { symbol: '₾', name: 'GEL', description: 'Грузинский лари' },
-    { symbol: '₺', name: 'TRY', description: 'Турецкая лира' },
-    { symbol: '֏', name: 'AMD', description: 'Армянский драм' },
-    { symbol: '฿', name: 'THB', description: 'Таиландский бат' },
-    { symbol: '₹', name: 'INR', description: 'Индийская рупия' },
-    { symbol: 'R$', name: 'BRL', description: 'Бразильский реал' },
-    { symbol: 'Rp', name: 'IDR', description: 'Индонезийская рупия' },
-    { symbol: '₼', name: 'AZN', description: 'Азербайджанский манат' },
-    { symbol: 'د.إ', name: 'AED', description: 'Объединенные Арабские Эмираты дирхам' },
-    { symbol: 'zł', name: 'PLN', description: 'Польский злотый' },
-    { symbol: '₪', name: 'ILS', description: 'Израильский шекель' },
-    { symbol: 'с', name: 'KGS', description: 'Киргизский сом' },
-    { symbol: 'ЅМ', name: 'TJS', description: 'Таджикский сомони' },
-];
+import {listingsApi} from "../services/api";
 
 function CurrencySelector() {
+    const [currencies, setCurrencies] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
     const [selectedCurrency, setSelectedCurrency] = React.useState(null);
     const location = useLocation();
     const navigate = useNavigate();
+
+    useEffect(() => {
+        const fetchCurrencies = async () => {
+            try {
+                setLoading(true);
+                const response = await listingsApi.getCurrencies();
+                setCurrencies(response.data);
+            } catch (err) {
+                console.error('Error fetching currencies:', err);
+                setError('Не удалось загрузить список валют');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchCurrencies();
+    }, []);
+
+// Добавить обработку состояния загрузки
+    if (loading) {
+        return <div className="flex justify-center p-12"><div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div></div>;
+    }
+
+    if (error) {
+        return <div className="text-red-500 p-12 text-center">{error}</div>;
+    }
 
     useEffect(() => {
         setSelectedCurrency(location.state.currentCurrency);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { mockUserDeals } from '../../data/mockListings';
+import { p2pApi } from '../../services/api';
 
 const P2PDealsPage = () => {
     const location = useLocation();
@@ -11,15 +11,21 @@ const P2PDealsPage = () => {
     const [activeTab, setActiveTab] = useState('active');
 
     useEffect(() => {
-        if (location.state?.selectedDeal) {
-            console.log('Selected deal:', location.state.selectedDeal);
-        }
-        // Имитируем загрузку данных
-        setTimeout(() => {
-            setDeals(mockUserDeals);
+        fetchDeals();
+    }, []);
+
+    const fetchDeals = async () => {
+        try {
+            setLoading(true);
+            const response = await p2pApi.getUserDeals();
+            setDeals(response.data);
             setLoading(false);
-        }, 500);
-    }, [location.state]);
+        } catch (err) {
+            setError('Не удалось загрузить сделки');
+            console.error('Error fetching deals:', err);
+            setLoading(false);
+        }
+    };
 
     const getStatusColor = (status) => {
         switch (status) {

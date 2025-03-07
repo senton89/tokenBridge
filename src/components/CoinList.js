@@ -1,22 +1,42 @@
-import React from 'react';
+import React, {useEffect, useState} from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import '../App.css';
-
-const coins = [
-    { id: 1, name: 'Toncoin', logo: './toncoin.png', symbol: 'TON' },
-    { id: 2, name: 'Tether', logo: './tether.png', symbol: 'USDT' },
-    { id: 3, name: 'Notcoin', logo: './notcoin.png', symbol: 'NOT' },
-    { id: 4, name: 'Bitcoin', logo: './bitcoin.png', symbol: 'BTC' },
-    { id: 5, name: 'Ethereum', logo: './etherium.png', symbol: 'ETH' },
-    { id: 6, name: 'Solana', logo: './solana.png', symbol: 'SOL' },
-    { id: 7, name: 'TRON', logo: './tron.png', symbol: 'TRX' },
-    { id: 8, name: 'Dogecoin', logo: './dogecoin.png', symbol: 'DOGE' },
-];
+import {listingsApi} from "../services/api";
 
 const CoinList = () => {
     const location = useLocation();
     const navigate = useNavigate();
+    const [coins, setCoins] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
     const { type, coinTo, coinFrom, isFrom, returnPath, selectedCurrency, selectedPaymentMethod, amountFilter } = location.state || {};
+
+    useEffect(() => {
+        const fetchCoins = async () => {
+            try {
+                setLoading(true);
+                const response = await listingsApi.getCoins();
+                setCoins(response.data);
+            } catch (err) {
+                console.error('Error fetching coins:', err);
+                setError('Не удалось загрузить список монет');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchCoins();
+    }, []);
+
+// Добавить обработку состояния загрузки
+    if (loading) {
+        return <div className="flex justify-center p-12"><div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div></div>;
+    }
+
+    if (error) {
+        return <div className="text-red-500 p-12 text-center">{error}</div>;
+    }
 
     let title;
     let link;

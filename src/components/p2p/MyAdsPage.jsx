@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { p2pApi } from '../../services/api';
 import { getCryptoImagePath, handleImageError, getCryptoColor } from '../../utils/imageHelper';
 
 const MyAdsPage = () => {
@@ -7,52 +8,33 @@ const MyAdsPage = () => {
     const [activeTab, setActiveTab] = useState('buy');
     const [selectedAd, setSelectedAd] = useState(null);
     const [showAdDetails, setShowAdDetails] = useState(false);
-    
-    // Пример данных для объявлений пользователя
-    const [myBuyAds, setMyBuyAds] = useState([
-        {
-            id: 1,
-            asset: 'USDT',
-            price: '99,36 RUB',
-            available: '500 USDT',
-            limits: '1 000 - 50 000 RUB',
-            paymentMethods: 'Сбербанк, Тинькофф',
-            status: 'active',
-            type: 'buy',
-            currency: 'RUB',
-            description: 'Быстрая покупка USDT. Оплата в течение 15 минут после подтверждения.',
-            terms: 'Пожалуйста, указывайте номер заказа при оплате. Перевод только с личного счета.'
-        },
-        {
-            id: 2,
-            asset: 'BTC',
-            price: '5 230 000 RUB',
-            available: '0.05 BTC',
-            limits: '10 000 - 260 000 RUB',
-            paymentMethods: 'Сбербанк',
-            status: 'inactive',
-            type: 'buy',
-            currency: 'RUB',
-            description: 'Покупаю BTC по хорошему курсу.',
-            terms: 'Только верифицированные пользователи с рейтингом выше 80%.'
+    const [myBuyAds, setMyBuyAds] = useState([]);
+    const [mySellAds, setMySellAds] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    useEffect(() => {
+        fetchUserAds();
+    }, []);
+
+    const fetchUserAds = async () => {
+        try {
+            setLoading(true);
+
+            // Получаем объявления о покупке
+            const buyResponse = await p2pApi.getBuyListings({ userOnly: true });
+            setMyBuyAds(buyResponse.data);
+
+            // Получаем объявления о продаже
+            const sellResponse = await p2pApi.getSellListings({ userOnly: true });
+            setMySellAds(sellResponse.data);
+        } catch (err) {
+            setError('Не удалось загрузить объявления');
+            console.error('Error fetching user ads:', err);
+        } finally {
+            setLoading(false);
         }
-    ]);
-    
-    const [mySellAds, setMySellAds] = useState([
-        {
-            id: 3,
-            asset: 'USDT',
-            price: '98,50 RUB',
-            available: '200 USDT',
-            limits: '1 000 - 20 000 RUB',
-            paymentMethods: 'Тинькофф',
-            status: 'active',
-            type: 'sell',
-            currency: 'RUB',
-            description: 'Продаю USDT. Быстрое подтверждение.',
-            terms: 'Оплата в течение 15 минут после начала сделки. Только верифицированные пользователи.'
-        }
-    ]);
+    };
 
     const handleCreateAd = () => {
         navigate('/p2p/create-ad');
@@ -63,33 +45,37 @@ const MyAdsPage = () => {
     };
 
     // Функция для активации/деактивации объявления
-    const toggleAdStatus = (id, type) => {
-        if (type === 'buy') {
-            setMyBuyAds(myBuyAds.map(ad => {
-                if (ad.id === id) {
-                    return {
-                        ...ad,
-                        status: ad.status === 'active' ? 'inactive' : 'active'
-                    };
-                }
-                return ad;
-            }));
-        } else {
-            setMySellAds(mySellAds.map(ad => {
-                if (ad.id === id) {
-                    return {
-                        ...ad,
-                        status: ad.status === 'active' ? 'inactive' : 'active'
-                    };
-                }
-                return ad;
-            }));
+    // Функция для активации/деактивации объявления
+    const toggleAdStatus = async (id, type) => {
+        try {
+            const adList = type === 'buy' ? myBuyAds : mySellAds;
+            const ad = adList.find(ad => ad.id === id);
+
+            if (!ad) return;
+
+            const newStatus = ad.status === 'active' ? 'inactive' : 'active';
+            await p2pApi.updateAdStatus(id, newStatus);
+
+            // Обновляем локальное состояние
+            if (type === 'buy') {
+                setMyBuyAds(myBuyAds.map(ad => {
+                    if (ad.id === id) {
+                        return { ...ad, status: newStatus };
+                    }
+                    return ad;
+                }));
+            } else {
+                setMySellAds(mySellAds.map(ad => {
+                    if (ad.id === id) {
+                        return { ...ad, status: newStatus };
+                    }
+                    return ad;
+                }));
+            }
+        } catch (err) {
+            setError('Не удалось обновить статус объявления');
+            console.error('Error updating ad status:', err);
         }
-    };
-    
-    const handleViewAdDetails = (ad) => {
-        setSelectedAd(ad);
-        setShowAdDetails(true);
     };
     
     const handleCloseAdDetails = () => {

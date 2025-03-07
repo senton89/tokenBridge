@@ -1,40 +1,91 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
-import InsufficientFundsPage from "./InsufficientFundsPage";
-
-// Константы
-const MIN_WITHDRAWAL = {
-    BTC: 0.00015,
-    ETH: 0.003,
-    DOGE: 7,
-    SOL: 0.01,
-    TRX: 10,
-    TON: 0.09,
-    NOT: 80,
-    USDT: 1,
-};
-
-const userBalances = {
-    TON: 1,
-    USDT: 0.5,
-    NOT: 80,
-    BTC: 0.00015,
-    ETH: 0.003,
-    SOL: 0.01,
-    TRX: 500,
-    DOGE: 6,
-};
-
-const EXCHANGE_RATE_API = 'https://min-api.cryptocompare.com/data/price';
-
+import { useLocation, useNavigate } from 'react-router-dom';
+import { walletApi } from '../../services/api';
+import InsufficientFundsPage from './InsufficientFundsPage';
 
 const WithdrawPage = () => {
     const location = useLocation();
+    const navigate = useNavigate();
     const { currency } = location.state || {};
-    const [amount, setAmount] = useState(userBalances[currency] || 0);
-    const [exchangeRate, setExchangeRate] = useState(0);
-    const [address, setAddress] = useState('UQC4JF09v...gLKHBriv');
-    const [isAddressEnabled, setAddressEnabled] = useState(false);
+    const [amount, setAmount] = useState('');
+    const [address, setAddress] = useState('');
+    const [userBalances, setUserBalances] = useState({});
+    const [minWithdrawalAmounts, setMinWithdrawalAmounts] = useState({});
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    useEffect(() => {
+        fetchUserBalance();
+    }, []);
+
+    const fetchUserBalance = async () => {
+        try {
+            const response = await walletApi.getBalance();
+            setUserBalances(response.data);
+        } catch (err) {
+            console.error('Error fetching balance:', err);
+        }
+    };
+
+    useEffect(() => {
+        const fetchMinWithdrawalAmounts = async () => {
+            try {
+                setLoading(true);
+                const response = await walletApi.getMinWithdrawalAmounts();
+                setMinWithdrawalAmounts(response.data);
+            } catch (err) {
+                console.error('Error fetching min withdrawal amounts:', err);
+                setError('Не удалось загрузить минимальные суммы вывода');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchMinWithdrawalAmounts();
+    }, []);
+
+    const handleWithdraw = async () => {
+        if (!amount || !address) {
+            setError('Пожалуйста, заполните все поля');
+            return;
+        }
+
+        try {
+            setSubmitting(true);
+            setError(null);
+
+            const response = await walletApi.createWithdrawal({
+                currency,
+                amount: parseFloat(amount),
+                address
+            });
+
+            // Перенаправляем на страницу успешного вывода
+            navigate('/withdraw/success', {
+                state: {
+                    currency,
+                    amount,
+                    address,
+                    txId: response.data.txId
+                }
+            });
+        } catch (err) {
+            console.error('Error creating withdrawal:', err);
+
+            if (err.response && err.response.data && err.response.data.message) {
+                setError(err.response.data.message);
+            } else {
+                setError('Не удалось создать запрос на вывод. Пожалуйста, попробуйте позже.');
+            }
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    // Проверяем, достаточно ли средств для вывода
+    if (!loading && userBalances[currency] < minWithdrawalAmounts[currency]) {
+        return <InsufficientFundsPage currency={currency} />;
+    }
 
     const handleAddressChange = (e) => {
         setAddress(e.target.value);

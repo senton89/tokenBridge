@@ -2,7 +2,7 @@ import React, {useState, useEffect, useCallback, useMemo} from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ListingItem from './ListingItem';
 import FilterBar from './FilterBar';
-import { mockBuyListings } from '../../data/mockListings';
+import { p2pApi } from '../../services/api';
 
 const BuyMenu = () => {
     const location = useLocation();
@@ -45,73 +45,33 @@ const BuyMenu = () => {
     }, [location.state]);
 
     // Функция для фильтрации объявлений
-    const filterListings = useCallback(() => {
+    const fetchListings = useCallback(async () => {
         setLoading(true);
         setError(null);
 
-        const timerId = setTimeout(() => {
-            try {
-                let filtered = [...mockBuyListings];
+        try {
+            const response = await p2pApi.getBuyListings({
+                crypto: filters.crypto,
+                currency: filters.currency,
+                paymentMethod: filters.paymentMethod !== "Все" ? filters.paymentMethod : null,
+                amount: filters.amount ? parseFloat(filters.amount) : null
+            });
 
-                // Фильтрация по криптовалюте
-                if (filters.crypto) {
-                    filtered = filtered.filter(listing => listing.crypto === filters.crypto);
-                }
-
-                // Фильтрация по валюте
-                if (filters.currency) {
-                    filtered = filtered.filter(listing => listing.currency === filters.currency);
-                }
-
-                // Фильтрация по способу оплаты
-                // if (filters.paymentMethod && filters.paymentMethod !== "Все") {
-                //     filtered = filtered.filter(listing =>
-                //         listing.paymentMethods.includes(filters.paymentMethod)
-                //     );
-                // } else if (filters.selectedPaymentMethods && filters.selectedPaymentMethods.length > 0) {
-                //     // Filter by any of the selected payment methods
-                //     filtered = filtered.filter(listing =>
-                //         listing.paymentMethods.some(method =>
-                //             filters.selectedPaymentMethods.includes(method)
-                //         )
-                //     );
-                // }
-
-                // Фильтрация по способу оплаты
-                if (filters.paymentMethods && filters.paymentMethods.length > 0) {
-                    // Фильтруем по любому из выбранных методов оплаты
-                    filtered = filtered.filter(listing =>
-                        listing.paymentMethods.some(method =>
-                            filters.paymentMethods.includes(method)
-                        )
-                    );
-                }
-                // Фильтрация по сумме
-                if (filters.amount && !isNaN(parseFloat(filters.amount))) {
-                    const amount = parseFloat(filters.amount);
-                    filtered = filtered.filter(listing =>
-                        (!listing.minAmount || listing.minAmount <= amount) &&
-                        (!listing.maxAmount || listing.maxAmount >= amount)
-                    );
-                }
-
-                setListings(filtered);
-                setLoading(false);
-            } catch (err) {
-                setError("Произошла ошибка при загрузке данных. Пожалуйста, попробуйте позже.");
-                setLoading(false);
-            }
-        }, 300);
-
-        return () => clearTimeout(timerId);
+            setListings(response.data);
+            setLoading(false);
+        } catch (err) {
+            setError("Произошла ошибка при загрузке данных. Пожалуйста, попробуйте позже.");
+            console.error('Error fetching listings:', err);
+            setLoading(false);
+        }
     }, [filters]);
 
-    const memoizedFilterListings = useMemo(() => filterListings, [filterListings]);
+    // Используем useMemo для мемоизации функции fetchListings
+    const memoizedFetchListings = useMemo(() => fetchListings, [fetchListings]);
 
     useEffect(() => {
-        const cleanup = memoizedFilterListings();
-        return cleanup;
-    }, [memoizedFilterListings]);
+        memoizedFetchListings();
+    }, [memoizedFetchListings]);
 
     // Обработчики изменения фильтров
     const handleCurrencyChange = useCallback(() => {
@@ -153,7 +113,6 @@ const BuyMenu = () => {
     }, []);
 
     const handleListingClick = (listing) => {
-        console.log("Clicked listing with ID:", listing.id);
         navigate(`/p2p/buy/${listing.id}`, {
             state: {
                 listing,

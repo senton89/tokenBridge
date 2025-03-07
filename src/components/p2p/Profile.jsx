@@ -1,6 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { p2pApi } from '../../services/api';
 
 const Profile = () => {
     const navigate = useNavigate();
@@ -16,19 +16,10 @@ const Profile = () => {
 
     const fetchProfile = async () => {
         try {
-            // In a real app, this would be an API call
-            // Simulating API response with mock data
-            setTimeout(() => {
-                const mockProfile = {
-                    id: 1,
-                    name: 'Alex Trader',
-                    joinDate: '15 января 2023',
-                    completedDeals: 47
-                };
-
-                setProfile(mockProfile);
-                setLoading(false);
-            }, 800);
+            setLoading(true);
+            const response = await p2pApi.getUserProfile();
+            setProfile(response.data);
+            setLoading(false);
         } catch (err) {
             setError('Не удалось загрузить профиль');
             console.error('Error fetching profile:', err);
@@ -38,37 +29,11 @@ const Profile = () => {
 
     const fetchActiveDeals = async () => {
         try {
-            // Simulating API response with mock data
-            setTimeout(() => {
-                const mockActiveDeals = [
-                    {
-                        id: 1,
-                        type: 'buy',
-                        crypto: 'TON',
-                        amount: 100,
-                        price: 98.50,
-                        totalPrice: 9850,
-                        currency: 'RUB',
-                        counterparty: 'CryptoTrader',
-                        date: new Date().toISOString(),
-                        paymentMethod: 'Тинькофф'
-                    },
-                    {
-                        id: 2,
-                        type: 'sell',
-                        crypto: 'USDT',
-                        amount: 500,
-                        price: 93.20,
-                        totalPrice: 46600,
-                        currency: 'RUB',
-                        counterparty: 'TetherMaster',
-                        date: new Date().toISOString(),
-                        paymentMethod: 'Сбербанк'
-                    }
-                ];
-
-                setActiveDeals(mockActiveDeals);
-            }, 800);
+            setLoading(true);
+            const response = await p2pApi.getUserDeals();
+            const deals = response.data.filter((deal) => deal.status === 'active');
+            setActiveDeals(deals);
+            setLoading(false);
         } catch (err) {
             console.error('Error fetching active deals:', err);
         }

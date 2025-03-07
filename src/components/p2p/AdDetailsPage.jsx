@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import {mockBuyListings, mockSellListings, mockUserDeals} from '../../data/mockListings';
+import { p2pApi } from '../../services/api';
 
 const AdDetailsPage = () => {
     const { id } = useParams();
@@ -16,25 +16,8 @@ const AdDetailsPage = () => {
     const fetchAd = async () => {
         try {
             setLoading(true);
-
-            // In development mode, use mock data
-            if (process.env.NODE_ENV === 'development') {
-                const mockAds = mockUserDeals;
-
-                const ad = mockAds.find(ad => ad.id === parseInt(id));
-
-                if (!ad) {
-                    throw new Error('Ad not found');
-                }
-
-                setAd(ad);
-            } else {
-                // In production, use the real API
-                const response = await fetch(`/api/p2p/ads/${id}`);
-                if (!response.ok) throw new Error('Failed to fetch ad');
-                const data = await response.json();
-                setAd(data);
-            }
+            const response = await p2pApi.getAdDetails(id);
+            setAd(response.data);
         } catch (err) {
             setError('Не удалось загрузить объявление');
             console.error('Error fetching ad:', err);
@@ -49,41 +32,7 @@ const AdDetailsPage = () => {
 
     const handleToggleStatus = async () => {
         try {
-            // First try to update via API
-            const response = await fetch(`/api/p2p/ads/${id}/status`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    status: ad.status === 'active' ? 'inactive' : 'active'
-                })
-            });
-
-            if (!response.ok) {
-                // If API update fails, update the mock data
-                const updatedAd = { ...ad, status: ad.status === 'active' ? 'inactive' : 'active' };
-                setAd(updatedAd);
-
-                // Also update the mock listings for consistency
-                const updateMockListings = (listings) => {
-                    return listings.map(listing =>
-                        listing.id === parseInt(id)
-                            ? { ...listing, status: updatedAd.status }
-                            : listing
-                    );
-                };
-
-                // This won't persist between page refreshes but works for the current session
-                if (ad.type === 'buy') {
-                    mockBuyListings.splice(0, mockBuyListings.length, ...updateMockListings(mockBuyListings));
-                } else {
-                    mockSellListings.splice(0, mockSellListings.length, ...updateMockListings(mockSellListings));
-                }
-
-                return;
-            }
-
+            await p2pApi.updateAdStatus(id, ad.status === 'active' ? 'inactive' : 'active');
             // Refresh ad data
             await fetchAd();
         } catch (err) {
@@ -92,33 +41,13 @@ const AdDetailsPage = () => {
         }
     };
 
+
     const handleDelete = async () => {
         if (!window.confirm('Вы уверены, что хотите удалить это объявление?')) {
             return;
         }
         try {
-            const response = await fetch(`/api/p2p/ads/${id}`, {
-                method: 'DELETE'
-            });
-
-            if (!response.ok) {
-                // If API delete fails, simulate deletion in mock data
-                if (ad.type === 'buy') {
-                    const index = mockBuyListings.findIndex(listing => listing.id === parseInt(id));
-                    if (index !== -1) {
-                        mockBuyListings.splice(index, 1);
-                    }
-                } else {
-                    const index = mockSellListings.findIndex(listing => listing.id === parseInt(id));
-                    if (index !== -1) {
-                        mockSellListings.splice(index, 1);
-                    }
-                }
-
-                navigate('/p2p/my-ads');
-                return;
-            }
-
+            await p2pApi.deleteAd(id);
             navigate('/p2p/my-ads');
         } catch (err) {
             setError('Не удалось удалить объявление');

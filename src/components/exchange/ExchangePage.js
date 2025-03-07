@@ -1,40 +1,88 @@
-import React, {useState, useEffect, useCallback} from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-
-const coins = [
-    { id: 1, name: 'Toncoin', logo: './toncoin.png', symbol: 'TON' },
-    { id: 2, name: 'Tether', logo: './tether.png', symbol: 'USDT' },
-    { id: 3, name: 'Notcoin', logo: './notcoin.png', symbol: 'NOT' },
-    { id: 4, name: 'Bitcoin', logo: './bitcoin.png', symbol: 'BTC' },
-    { id: 5, name: 'Ethereum', logo: './etherium.png', symbol: 'ETH' },
-    { id: 6, name: 'Solana', logo: './solana.png', symbol: 'SOL' },
-    { id: 7, name: 'TRON', logo: './tron.png', symbol: 'TRX' },
-    { id: 8, name: 'Dogecoin', logo: './dogecoin.png', symbol: 'DOGE' },
-];
-
-const userBalances = {
-    TON: 1,
-    USDT: 500,
-    NOT: 80,
-    BTC: 0.00015,
-    ETH: 0.003,
-    SOL: 0.01,
-    TRX: 1000,
-    DOGE: 7,
-};
-
-const EXCHANGE_RATE_API = 'https://min-api.cryptocompare.com/data/price';
+import {walletApi, marketApi, listingsApi} from '../../services/api';
 
 const ExchangePage = () => {
     const navigate = useNavigate();
     const location = useLocation();
-
-    const [fromCoin, setFromCoin] = useState(coins[0]);
-    const [toCoin, setToCoin] = useState(coins[1]);
-    const [amount, setAmount] = useState(0);
-    const [result, setResult] = useState(0);
+    const [coins, setCoins] = useState([]);
+    const [fromCoin, setFromCoin] = useState(null);
+    const [toCoin, setToCoin] = useState(null);
+    const [amount, setAmount] = useState('');
+    const [result, setResult] = useState('');
     const [exchangeRate, setExchangeRate] = useState(0);
+    const [userBalances, setUserBalances] = useState({});
+    const [availableCoins, setAvailableCoins] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
+    useEffect(() => {
+        const fetchCoins = async () => {
+            try {
+                setLoading(true);
+                const response = await listingsApi.getCoins();
+                setCoins(response.data);
+            } catch (err) {
+                console.error('Error fetching coins:', err);
+                setError('Не удалось загрузить список монет');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchCoins();
+    }, []);
+
+    // Загрузка доступных монет и баланса пользователя
+    useEffect(() => {
+        const fetchInitialData = async () => {
+            try {
+                setLoading(true);
+
+                // Получаем список доступных монет
+                const coinsResponse = await walletApi.getAvailableCoins();
+                setAvailableCoins(coinsResponse.data);
+
+                // Устанавливаем начальные монеты
+                if (coinsResponse.data.length >= 2) {
+                    setFromCoin(coinsResponse.data[0]);
+                    setToCoin(coinsResponse.data[1]);
+                }
+
+                // Получаем баланс пользователя
+                const balanceResponse = await walletApi.getBalance();
+                setUserBalances(balanceResponse.data);
+
+                setLoading(false);
+            } catch (err) {
+                setError('Не удалось загрузить данные');
+                console.error('Error fetching initial data:', err);
+                setLoading(false);
+            }
+        };
+
+        fetchInitialData();
+    }, []);
+
+    // Обновление курса обмена при изменении монет
+    useEffect(() => {
+        if (fromCoin && toCoin) {
+            fetchExchangeRate();
+        }
+    }, [fromCoin, toCoin]);
+
+    const fetchExchangeRate = async () => {
+        try {
+            const response = await marketApi.getExchangeRate({
+                fromCurrency: fromCoin.symbol,
+                toCurrency: toCoin.symbol
+            });
+
+            setExchangeRate(response.data.rate);
+        } catch (err) {
+            console.error('Error fetching exchange rate:', err);
+        }
+    };
 
     const handleAmountChange = (event) => {
         const value = event.target.value;
@@ -53,38 +101,86 @@ const ExchangePage = () => {
     };
 
     const updateResult = (amount) => {
-        const url = `${EXCHANGE_RATE_API}?fsym=${fromCoin.symbol}&tsyms=${toCoin.symbol}`;
-        fetch(url)
-            .then((response) => response.json())
-            .then((data) => {
-                const exchangeRate = data[toCoin.symbol];
-                const resultAmount = amount * exchangeRate;
-                setResult(formatNumber(resultAmount));
-                setExchangeRate(exchangeRate);
-            });
+        if (!fromCoin || !toCoin || !amount) return;
+
+        try {
+            setLoading(true);
+            marketApi.getExchangeRate({
+                fromCurrency: fromCoin.symbol,
+                toCurrency: toCoin.symbol
+            })
+                .then(response => {
+                    const exchangeRate = response.data.rate;
+                    const resultAmount = amount * exchangeRate;
+                    setResult(formatNumber(resultAmount));
+                    setExchangeRate(exchangeRate);
+                })
+                .catch(error => {
+                    console.error('Error fetching exchange rate:', error);
+                    setError('Не удалось получить курс обмена');
+                })
+                .finally(() => {
+                    setLoading(false);
+                });
+        } catch (err) {
+            console.error('Error in updateResult:', err);
+            setLoading(false);
+        }
     };
 
-    const updateAmount = (result) => {
-        const url = `${EXCHANGE_RATE_API}?fsym=${toCoin.symbol}&tsyms=${fromCoin.symbol}`;
-        fetch(url)
-            .then((response) => response.json())
-            .then((data) => {
-                const exchangeRate = data[fromCoin.symbol];
-                const amountValue = result * exchangeRate;
-                setAmount(formatNumber(amountValue));
-                setExchangeRate(1 / exchangeRate);
-            });
-    };
+    const updateAmount = useCallback((result) => {
+        if (!fromCoin || !toCoin || !result) return;
 
-    const updateExchangeRate = () => {
-        const url = `${EXCHANGE_RATE_API}?fsym=${fromCoin.symbol}&tsyms=${toCoin.symbol}`;
-        fetch(url)
-            .then((response) => response.json())
-            .then((data) => {
-                const exchangeRate = data[toCoin.symbol];
-                setExchangeRate(exchangeRate);
-            });
-    };
+        try {
+            setLoading(true);
+            marketApi.getExchangeRate({
+                fromCurrency: toCoin.symbol,
+                toCurrency: fromCoin.symbol
+            })
+                .then(response => {
+                    const exchangeRate = response.data.rate;
+                    const amountValue = result / exchangeRate;
+                    setAmount(formatNumber(amountValue));
+                    setExchangeRate(1 / exchangeRate);
+                })
+                .catch(error => {
+                    console.error('Error fetching exchange rate:', error);
+                    setError('Не удалось получить курс обмена');
+                })
+                .finally(() => {
+                    setLoading(false);
+                });
+        } catch (err) {
+            console.error('Error in updateAmount:', err);
+            setLoading(false);
+        }
+    }, [fromCoin, toCoin]);
+
+    const updateExchangeRate = useCallback(() => {
+        if (!fromCoin || !toCoin) return;
+
+        try {
+            setLoading(true);
+            marketApi.getExchangeRate({
+                fromCurrency: fromCoin.symbol,
+                toCurrency: toCoin.symbol
+            })
+                .then(response => {
+                    const exchangeRate = response.data.rate;
+                    setExchangeRate(exchangeRate);
+                })
+                .catch(error => {
+                    console.error('Error fetching exchange rate:', error);
+                    setError('Не удалось получить курс обмена');
+                })
+                .finally(() => {
+                    setLoading(false);
+                });
+        } catch (err) {
+            console.error('Error in updateExchangeRate:', err);
+            setLoading(false);
+        }
+    }, [fromCoin, toCoin]);
 
     // Функция для форматирования числа (удаление лишних нулей)
     const formatNumber = (value) => {
@@ -134,9 +230,8 @@ const ExchangePage = () => {
 
     useEffect(() => {
         updateResult(amount);
-        const intervalId = setInterval(updateExchangeRate, 1000);
-        return () => clearInterval(intervalId);
-    }, [fromCoin, toCoin]);
+        updateExchangeRate();
+    }, [fromCoin, toCoin, amount]);
 
     return (
         <div className="flex h-screen">
