@@ -2,21 +2,36 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {listingsApi, p2pApi} from '../../services/api';
 
+const availablePaymentMethods = [
+    'Сбербанк',
+    'Тинькофф',
+    'QIWI',
+    'Yandex.Money',
+    'Альфа-Банк',
+    'ВТБ',
+    'Райффайзен',
+    'Почта Банк',
+    'Наличные'
+];
+
 const AnnouncementPage = () => {
     const navigate = useNavigate();
     const location = useLocation();
 
-    // Получаем тип объявления из location.state (если есть)
+    // Get ad type from location.state (if exists)
     const initialAdType = location.state?.adType || 'buy';
     const editMode = location.state?.editMode || false;
     const adToEdit = location.state?.ad || null;
 
     const [coins, setCoins] = useState([]);
-    const [isFixedPrice, setIsFixedPrice] = useState(false);
-    const [priceType, setPriceType] = useState('Плавающая');
+    const [currencies, setCurrencies] = useState([]);
+    const [isFixedPrice, setIsFixedPrice] = useState(true);
+    const [priceType, setPriceType] = useState('Фиксированная');
     const [isBuy, setIsBuy] = useState(initialAdType === 'buy');
     const [selectedCurrency, setSelectedCurrency] = useState('USDT');
+    const [selectedFiatCurrency, setSelectedFiatCurrency] = useState('RUB');
     const [showCurrencyMenu, setShowCurrencyMenu] = useState(false);
+    const [showFiatCurrencyMenu, setShowFiatCurrencyMenu] = useState(false);
     const [price, setPrice] = useState('');
     const [percent, setPercent] = useState('');
     const [amount, setAmount] = useState('');
@@ -29,17 +44,30 @@ const AnnouncementPage = () => {
     const [showPaymentMethodsModal, setShowPaymentMethodsModal] = useState(false);
     const [terms, setTerms] = useState('');
     const [autoReply, setAutoReply] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const [marketPrice, setMarketPrice] = useState(null);
 
     useEffect(() => {
-        const fetchCoins = async () => {
+        const fetchData = async () => {
             try {
-                const response = await listingsApi.getCoins();
-                setCoins(response.data);
+                setLoading(true);
+                const [coinsResponse, currenciesResponse] = await Promise.all([
+                    listingsApi.getCoins(),
+                    listingsApi.getCurrencies()
+                ]);
+                setCoins(coinsResponse.data);
+                setCurrencies(currenciesResponse.data);
+                setError(null);
             } catch (error) {
-                console.error(error);
+                console.error('Error fetching data:', error);
+                setError('Не удалось загрузить данные. Пожалуйста, попробуйте позже.');
+            } finally {
+                setLoading(false);
             }
         };
-        fetchCoins();
+
+        fetchData();
     }, []);
 
     // Устанавливаем начальный тип объявления на основе переданных параметров
@@ -47,9 +75,11 @@ const AnnouncementPage = () => {
         if (editMode && adToEdit) {
             setIsBuy(adToEdit.type === 'buy');
             setSelectedCurrency(adToEdit.asset || adToEdit.crypto || 'USDT');
-            setIsFixedPrice(true);
-            setPriceType('Фиксированная');
+            setSelectedFiatCurrency(adToEdit.currency || 'RUB');
+            setIsFixedPrice(adToEdit.pricePercent === null || adToEdit.pricePercent === undefined);
+            setPriceType(adToEdit.pricePercent === null || adToEdit.pricePercent === undefined ? 'Фиксированная' : 'Плавающая');
             setPrice(adToEdit.price?.toString() || '');
+            setPercent(adToEdit.pricePercent?.toString() || '');
             setAmount(adToEdit.available?.toString() || adToEdit.availableAmount?.toString() || '');
             setMinAmount(adToEdit.minAmount?.toString() || '');
             setMaxAmount(adToEdit.maxAmount?.toString() || '');
@@ -68,13 +98,25 @@ const AnnouncementPage = () => {
         }
     }, [location.state]);
 
+    useEffect(() => {
+        const fetchMarketPrice = async () => {
+            try {
+                if (selectedCurrency && selectedFiatCurrency) {
+                    const response = await p2pApi.getMarketPrice(selectedCurrency, selectedFiatCurrency);
+                    setMarketPrice(response.data.price);
+                }
+            } catch (error) {
+                console.error('Error fetching market price:', error);
+            }
+        };
+
+        fetchMarketPrice();
+    }, [selectedCurrency, selectedFiatCurrency]);
+
+
     const handlePriceTypeChange = (type) => {
         setPriceType(type);
-        if (type === 'Фиксированная') {
-            setIsFixedPrice(true);
-        } else {
-            setIsFixedPrice(false);
-        }
+        setIsFixedPrice(type === 'Фиксированная');
     };
 
     const handleBuySellChange = (isBuy) => {
@@ -86,24 +128,39 @@ const AnnouncementPage = () => {
         setShowCurrencyMenu(false);
     };
 
+    const handleFiatCurrencyChange = (currency) => {
+        setSelectedFiatCurrency(currency);
+        setShowFiatCurrencyMenu(false);
+    };
+
     const handlePriceChange = (e) => {
-        setPrice(e.target.value);
+        // Allow only numbers and decimal point
+        const value = e.target.value.replace(/[^0-9.]/g, '');
+        setPrice(value);
     };
 
     const handlePercentChange = (e) => {
-        setPercent(e.target.value);
+        // Allow only numbers
+        const value = e.target.value.replace(/[^0-9]/g, '');
+        setPercent(value);
     };
 
     const handleAmountChange = (e) => {
-        setAmount(e.target.value);
+        // Allow only numbers and decimal point
+        const value = e.target.value.replace(/[^0-9.]/g, '');
+        setAmount(value);
     };
 
     const handleMinAmountChange = (e) => {
-        setMinAmount(e.target.value);
+        // Allow only numbers and decimal point
+        const value = e.target.value.replace(/[^0-9.]/g, '');
+        setMinAmount(value);
     };
 
     const handleMaxAmountChange = (e) => {
-        setMaxAmount(e.target.value);
+        // Allow only numbers and decimal point
+        const value = e.target.value.replace(/[^0-9.]/g, '');
+        setMaxAmount(value);
     };
 
     const handleRoundAmountChange = () => {
@@ -132,14 +189,28 @@ const AnnouncementPage = () => {
         setAutoReply(e.target.value);
     };
 
-    // Функция для создания нового объявления
+    const handleSetMaxAmount = async () => {
+        try {
+            // Get user balance
+            const response = await p2pApi.getUserBalance();
+            const balance = response.data[selectedCurrency] || 0;
+            setAmount(balance.toString());
+        } catch (error) {
+            console.error('Error fetching user balance:', error);
+        }
+    };
+
+    // Function to create a new listing
     const createNewListing = async () => {
         try {
-            // Создаем новое объявление на основе введенных данных
+            setLoading(true);
+            setError(null);
+
+            // Create new listing based on input data
             const newListing = {
                 type: isBuy ? 'buy' : 'sell',
                 crypto: selectedCurrency,
-                currency: 'RUB', // Пока используем только RUB
+                currency: selectedFiatCurrency,
                 price: isFixedPrice ? parseFloat(price) : null,
                 pricePercent: !isFixedPrice ? parseFloat(percent) : null,
                 available: amount ? parseFloat(amount) : 0,
@@ -153,38 +224,85 @@ const AnnouncementPage = () => {
             };
 
             if (editMode && adToEdit) {
-                // Обновляем существующее объявление
+                // Update existing ad
                 await p2pApi.updateAd(adToEdit.id, newListing);
             } else {
-                // Добавляем новое объявление
+                // Create new ad
                 await p2pApi.createAd(newListing);
             }
 
-            // Перенаправляем на страницу с объявлениями
+            // Redirect to ads page
             navigate('/p2p/my-ads', { state: { newListing: true } });
         } catch (error) {
             console.error('Error creating/updating ad:', error);
-            // Здесь можно добавить обработку ошибок, например, показать уведомление
+            setError('Не удалось создать/обновить объявление. Пожалуйста, проверьте введенные данные и попробуйте снова.');
+        } finally {
+            setLoading(false);
         }
     };
 
-
-    // Функция для перехода к следующему шагу
+// Function to go to next step
     const handleNextStep = () => {
+        // Validate current step
+        if (!validateCurrentStep()) {
+            return;
+        }
+
         if (step < 5) {
             setStep(step + 1);
         } else {
-            // Если это последний шаг, создаем объявление
+            // If this is the last step, create the listing
             createNewListing();
         }
     };
+
+    // Function to validate current step
+    const validateCurrentStep = () => {
+        setError(null);
+
+        switch (step) {
+            case 1:
+                if (isFixedPrice && (!price || parseFloat(price) <= 0)) {
+                    setError('Пожалуйста, укажите корректную цену');
+                    return false;
+                }
+                if (!isFixedPrice && (!percent || parseFloat(percent) <= 0)) {
+                    setError('Пожалуйста, укажите корректный процент от рыночной цены');
+                    return false;
+                }
+                return true;
+            case 2:
+                if (!amount || parseFloat(amount) <= 0) {
+                    setError('Пожалуйста, укажите доступную сумму');
+                    return false;
+                }
+                if (!minAmount || parseFloat(minAmount) <= 0) {
+                    setError('Пожалуйста, укажите минимальную сумму сделки');
+                    return false;
+                }
+                if (maxAmount && parseFloat(maxAmount) < parseFloat(minAmount)) {
+                    setError('Максимальная сумма должна быть больше минимальной');
+                    return false;
+                }
+                return true;
+            case 3:
+                if (selectedPaymentMethods.length === 0) {
+                    setError('Пожалуйста, выберите хотя бы один способ оплаты');
+                    return false;
+                }
+                return true;
+            default:
+                return true;
+        }
+    };
+
 
     // Функция для возврата к предыдущему шагу
     const handlePrevStep = () => {
         if (step > 1) {
             setStep(step - 1);
         } else {
-            // Если это первый шаг, возвращаемся на страницу с объявлениями
+            // If this is the first step, go back to ads page
             navigate('/p2p/my-ads');
         }
     };
@@ -474,9 +592,9 @@ const AnnouncementPage = () => {
                                 <div className="flex justify-between">
                                     <span className="text-gray-400">Лимиты:</span>
                                     <span>
-                    {minAmount || '0'}
+                                        {minAmount || '0'}
                                         {maxAmount ? ` - ${maxAmount}` : ''} RUB
-                  </span>
+                                    </span>
                                 </div>
 
                                 <div className="flex justify-between">

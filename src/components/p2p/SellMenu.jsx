@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ListingItem from './ListingItem';
 import FilterBar from './FilterBar';
-import { mockSellListings } from '../../data/mockListings';
+import {p2pApi} from "../../services/api";
+
 
 const SellMenu = () => {
     const location = useLocation();
@@ -42,64 +43,42 @@ const SellMenu = () => {
     }, [location.state]);
 
     // Function to filter listings
-    const filterListings = useCallback(() => {
+    const fetchListings = useCallback(async () => {
         setLoading(true);
         setError(null);
 
-        const timerId = setTimeout(() => {
-            try {
-                let filtered = [...mockSellListings]; // Use sell listings instead of buy listings
+        try {
+            // Create filter object for API
+            const filterData = {
+                crypto: filters.crypto || undefined,
+                currency: filters.currency || undefined,
+                paymentMethod: filters.paymentMethod !== "Все" ? filters.paymentMethod : undefined,
+                amount: filters.amount ? parseFloat(filters.amount) : undefined
+            };
 
-                // Filter by cryptocurrency
-                if (filters.crypto) {
-                    filtered = filtered.filter(listing => listing.crypto === filters.crypto);
-                }
+            const response = await p2pApi.getSellListings(filterData);
 
-                // Filter by currency
-                if (filters.currency) {
-                    filtered = filtered.filter(listing => listing.currency === filters.currency);
-                }
-
-                // Filter by payment method
-                if (filters.paymentMethod && filters.paymentMethod !== "Все") {
-                    filtered = filtered.filter(listing =>
-                        listing.paymentMethods.includes(filters.paymentMethod)
-                    );
-                } else if (filters.selectedPaymentMethods && filters.selectedPaymentMethods.length > 0) {
-                    // Filter by any of the selected payment methods
-                    filtered = filtered.filter(listing =>
-                        listing.paymentMethods.some(method =>
-                            filters.selectedPaymentMethods.includes(method)
-                        )
-                    );
-                }
-
-                // Filter by amount
-                if (filters.amount && !isNaN(parseFloat(filters.amount))) {
-                    const amount = parseFloat(filters.amount);
-                    filtered = filtered.filter(listing =>
-                        (!listing.minAmount || listing.minAmount <= amount) &&
-                        (!listing.maxAmount || listing.maxAmount >= amount)
-                    );
-                }
-
-                setListings(filtered);
-                setLoading(false);
-            } catch (err) {
-                setError("Произошла ошибка при загрузке данных. Пожалуйста, попробуйте позже.");
-                setLoading(false);
+            if (!response.data || !Array.isArray(response.data)) {
+                throw new Error('Unexpected response format');
             }
-        }, 500);
 
-        return () => clearTimeout(timerId);
+            setListings(response.data);
+        } catch (err) {
+            setError("Произошла ошибка при загрузке данных. " +
+                (err.response?.data?.message || err.message));
+            console.error('Error fetching listings:', err);
+        } finally {
+            setLoading(false);
+        }
     }, [filters]);
 
-    const memoizedFilterListings = useMemo(() => filterListings, [filterListings]);
-
     useEffect(() => {
-        const cleanup = memoizedFilterListings();
-        return cleanup;
-    }, [memoizedFilterListings]);
+        const timerId = setTimeout(() => {
+            fetchListings();
+        }, 500); // Debounce API calls
+
+        return () => clearTimeout(timerId);
+    }, [fetchListings]);
 
     // Filter handlers
     const handleCurrencyChange = useCallback(() => {

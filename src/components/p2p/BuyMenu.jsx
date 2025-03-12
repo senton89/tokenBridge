@@ -50,18 +50,27 @@ const BuyMenu = () => {
         setError(null);
 
         try {
-            const response = await p2pApi.getBuyListings({
+            // Create proper filter object for API
+            const filterParams = {
                 crypto: filters.crypto,
                 currency: filters.currency,
-                paymentMethod: filters.paymentMethod !== "Все" ? filters.paymentMethod : null,
-                amount: filters.amount ? parseFloat(filters.amount) : null
-            });
+                paymentMethods: filters.paymentMethod !== "Все" ? [filters.paymentMethod] : undefined,
+                amount: filters.amount ? parseFloat(filters.amount) : undefined
+            };
 
-            setListings(response.data);
-            setLoading(false);
+            const response = await p2pApi.getBuyListings(filterParams);
+
+            if (response && response.data) {
+                setListings(response.data);
+            } else {
+                setListings([]);
+                setError("Получены некорректные данные от сервера");
+            }
         } catch (err) {
             setError("Произошла ошибка при загрузке данных. Пожалуйста, попробуйте позже.");
             console.error('Error fetching listings:', err);
+            setListings([]);
+        } finally {
             setLoading(false);
         }
     }, [filters]);
@@ -126,6 +135,20 @@ const BuyMenu = () => {
         });
     };
 
+    const renderEmptyState = () => (
+        <div className="text-center text-gray-400 py-8">
+            <i className="fas fa-search text-3xl mb-2" />
+            <p>Объявления не найдены</p>
+            {error && <p className="text-red-400 mt-2">{error}</p>}
+            <button
+                onClick={fetchListings}
+                className="mt-4 px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-700"
+            >
+                Попробовать снова
+            </button>
+        </div>
+    );
+
     if (loading && listings.length === 0) {
         return (
             <div className="flex items-center justify-center h-screen bg-gray-900">
@@ -160,20 +183,17 @@ const BuyMenu = () => {
             )}
 
             <div className="space-y-4 px-4">
-                {listings.map((listing) => (
-                    <ListingItem
-                        key={listing.id}
-                        buttonType="buy"
-                        listing={listing}
-                        onClick={() => handleListingClick(listing)}
-                    />
-                ))}
-
-                {listings.length === 0 && !loading && (
-                    <div className="text-center text-gray-400 py-8">
-                        <i className="fas fa-search text-3xl mb-2" />
-                        <p>Объявления не найдены</p>
-                    </div>
+                {listings.length > 0 ? (
+                    listings.map((listing) => (
+                        <ListingItem
+                            key={listing.id}
+                            buttonType="buy"
+                            listing={listing}
+                            onClick={() => handleListingClick(listing)}
+                        />
+                    ))
+                ) : (
+                    !loading && renderEmptyState()
                 )}
             </div>
         </div>

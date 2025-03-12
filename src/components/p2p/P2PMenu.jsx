@@ -1,51 +1,37 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {mockUserDeals} from "../../data/mockListings";
-
-// const testAds = [
-//     {
-//         id: 1,
-//         type: 'buy',
-//         asset: 'BTC',
-//         price: 50000,
-//         amount: 0.1,
-//         paymentMethods: ['Sberbank', 'Tinkoff'],
-//         userRating: 4.8
-//     },
-//     {
-//         id: 2,
-//         type: 'sell',
-//         asset: 'ETH',
-//         price: 3000,
-//         amount: 2,
-//         paymentMethods: ['QIWI', 'Yandex.Money'],
-//         userRating: 4.5
-//     }
-// ];
-
-const testDeals = [
-    {
-        id: 1,
-        status: 'completed',
-        asset: 'BTC',
-        amount: 0.05,
-        price: 50000,
-        counterparty: 'User123',
-        date: '2025-02-28'
-    },
-    {
-        id: 2,
-        status: 'in progress',
-        asset: 'ETH',
-        amount: 1,
-        price: 3000,
-        counterparty: 'User456',
-        date: '2025-03-01'
-    }
-];
+import { p2pApi } from '../../services/api'; // Import the API service
 
 const P2PMenu = () => {
     const navigate = useNavigate();
+    const [userAds, setUserAds] = useState([]);
+    const [userDeals, setUserDeals] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    useEffect(() => {
+        // Fetch user's ads and deals when component mounts
+        const fetchUserData = async () => {
+            try {
+                setLoading(true);
+                // Get user's ads
+                const adsResponse = await p2pApi.getUserAds();
+                setUserAds(adsResponse.data || []);
+
+                // Get user's deals
+                const dealsResponse = await p2pApi.getUserDeals();
+                setUserDeals(dealsResponse.data || []);
+
+                setLoading(false);
+            } catch (err) {
+                console.error('Error fetching user data:', err);
+                setError('Failed to load your data. Please try again later.');
+                setLoading(false);
+            }
+        };
+
+        fetchUserData();
+    }, []);
 
     const handleBuyClick = () => {
         navigate('/p2p/buy');
@@ -66,26 +52,20 @@ const P2PMenu = () => {
     const handleProfileClick = () => {
         navigate('/p2p/profile');
     };
-    
-    const handleDealsClick = (deal) => {
-        navigate(`/p2p/deals/`);
+
+    const handleDealsClick = () => {
+        navigate('/p2p/deals');
     };
-    
+
     const handlePaymentMethodsClick = () => {
         navigate('/p2p/payment-methods');
     };
-    
+
     const handleAdClick = (ad) => {
-        // Перенаправляем на соответствующую страницу в зависимости от типа объявления
-        if (ad.type === 'buy') {
-            navigate(`/p2p/ad/${ad.id}`, { state: { listing: ad } });
-        } else {
-            navigate(`/p2p/ad/${ad.id}`, { state: { listing: ad } });
-        }
+        navigate(`/p2p/ad/${ad.id}`, { state: { listing: ad } });
     };
-    
+
     const handleDealClick = (deal) => {
-        // Перенаправляем на страницу сделки с передачей данных через state
         navigate(`/p2p/deals/${deal.id}`);
     };
 
@@ -97,16 +77,17 @@ const P2PMenu = () => {
                 <h2 className="text-lg font-bold">P2P Маркет</h2>
                 <p className="text-gray-400">Обменивайте активы напрямую у других пользователей</p>
             </div>
+
             {/* Buttons */}
             <div className="flex justify-center space-x-4 mb-6 text-md">
-                <button 
+                <button
                     className="bg-gradient-to-r from-blue-500 to-blue-700 text-white py-2.5 rounded-xl w-full"
                     onClick={handleBuyClick}
                 >
                     <i className="fas fa-arrow-down mr-2" />
                     Купить
                 </button>
-                <button 
+                <button
                     className="bg-gradient-to-r from-blue-500 to-blue-700 text-white py-2.5 rounded-xl w-full"
                     onClick={handleSellClick}
                 >
@@ -114,27 +95,36 @@ const P2PMenu = () => {
                     Продать
                 </button>
             </div>
+
             {/* Options */}
             <div className="space-y-4">
                 <div className="flex flex-col bg-gray-800 p-4 rounded-2xl">
                     <h3 className="font-bold mb-2">Мои объявления</h3>
-                    {mockUserDeals.length > 0 ? (
+                    {loading ? (
+                        <div className="text-center py-4">
+                            <p className="text-gray-400">Загрузка...</p>
+                        </div>
+                    ) : error ? (
+                        <div className="text-center py-4">
+                            <p className="text-red-400">{error}</p>
+                        </div>
+                    ) : userAds.length > 0 ? (
                         <div className="space-y-2">
-                            {mockUserDeals.map(ad => (
-                                <div 
-                                    key={ad.id} 
+                            {userAds.map(ad => (
+                                <div
+                                    key={ad.id}
                                     className="flex justify-between items-center bg-gray-700 p-3 rounded-xl cursor-pointer hover:bg-gray-600 transition-colors"
                                     onClick={() => handleAdClick(ad)}
                                 >
                                     <div>
                                         <div className="flex items-center">
-                                            <span className={`text-xs px-2 py-0.5 rounded mr-2 ${ad.type === 'buy' ? 'bg-green-800 text-green-200' : 'bg-red-800 text-red-200'}`}>
-                                                {ad.type === 'buy' ? 'Покупка' : 'Продажа'}
-                                            </span>
+                      <span className={`text-xs px-2 py-0.5 rounded mr-2 ${ad.type === 'buy' ? 'bg-green-800 text-green-200' : 'bg-red-800 text-red-200'}`}>
+                        {ad.type === 'buy' ? 'Покупка' : 'Продажа'}
+                      </span>
                                             <span className="font-medium">{ad.crypto}</span>
                                         </div>
                                         <div className="text-sm text-gray-400 mt-1">
-                                            {ad.totalPrice} RUB • {ad.amount} {ad.crypto}
+                                            {ad.price} {ad.currency} • {ad.available} {ad.crypto}
                                         </div>
                                     </div>
                                     <div className="text-blue-400">
@@ -146,7 +136,7 @@ const P2PMenu = () => {
                     ) : (
                         <div className="text-center py-4">
                             <p className="text-gray-400 mb-3">У вас пока нет объявлений</p>
-                            <button 
+                            <button
                                 className="bg-blue-600 text-white px-4 py-2 rounded-lg"
                                 onClick={handleCreateAdClick}
                             >
@@ -154,7 +144,7 @@ const P2PMenu = () => {
                             </button>
                         </div>
                     )}
-                    <button 
+                    <button
                         className="text-blue-400 mt-3 text-sm self-center"
                         onClick={handleMyAdsClick}
                     >
@@ -164,26 +154,39 @@ const P2PMenu = () => {
 
                 <div className="flex flex-col bg-gray-800 p-4 rounded-2xl">
                     <h3 className="font-bold mb-2">Мои сделки</h3>
-                    {testDeals.length > 0 ? (
+                    {loading ? (
+                        <div className="text-center py-4">
+                            <p className="text-gray-400">Загрузка...</p>
+                        </div>
+                    ) : error ? (
+                        <div className="text-center py-4">
+                            <p className="text-red-400">{error}</p>
+                        </div>
+                    ) : userDeals.length > 0 ? (
                         <div className="space-y-2">
-                            {testDeals.map(deal => (
-                                <div 
-                                    key={deal.id} 
+                            {userDeals.slice(0, 5).map(deal => (
+                                <div
+                                    key={deal.id}
                                     className="flex justify-between items-center bg-gray-700 p-3 rounded-xl cursor-pointer hover:bg-gray-600 transition-colors"
                                     onClick={() => handleDealClick(deal)}
                                 >
                                     <div>
                                         <div className="flex items-center">
-                                            <span className={`text-xs px-2 py-0.5 rounded mr-2 ${deal.status === 'completed' ? 'bg-green-800 text-green-200' : 'bg-yellow-800 text-yellow-200'}`}>
-                                                {deal.status === 'completed' ? 'Завершена' : 'В процессе'}
-                                            </span>
-                                            <span className="font-medium">{deal.asset}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded mr-2 ${
+                          deal.status === 'completed' ? 'bg-green-800 text-green-200' :
+                              deal.status === 'active' ? 'bg-yellow-800 text-yellow-200' :
+                                  'bg-red-800 text-red-200'
+                      }`}>
+                        {deal.status === 'completed' ? 'Завершена' :
+                            deal.status === 'active' ? 'В процессе' : 'Отменена'}
+                      </span>
+                                            <span className="font-medium">{deal.crypto}</span>
                                         </div>
                                         <div className="text-sm text-gray-400 mt-1">
-                                            {deal.amount} {deal.asset} • {deal.price} RUB
+                                            {deal.amount} {deal.crypto} • {deal.price} {deal.currency}
                                         </div>
                                         <div className="text-xs text-gray-500">
-                                            {deal.date} • {deal.counterparty}
+                                            {new Date(deal.date).toLocaleDateString()} • {deal.counterparty.name}
                                         </div>
                                     </div>
                                     <div className="text-blue-400">
@@ -197,23 +200,23 @@ const P2PMenu = () => {
                             <p className="text-gray-400">У вас пока нет сделок</p>
                         </div>
                     )}
-                    <button 
+                    <button
                         className="text-blue-400 mt-3 text-sm self-center"
                         onClick={handleDealsClick}
                     >
                         Все сделки
                     </button>
                 </div>
-                
+
                 <div className="flex justify-between space-x-4">
-                    <button 
+                    <button
                         className="flex flex-col items-center justify-center bg-gray-800 p-4 rounded-2xl flex-1"
                         onClick={handlePaymentMethodsClick}
                     >
                         <i className="fas fa-credit-card text-2xl mb-2" />
                         <span className="text-sm">Способы оплаты</span>
                     </button>
-                    <button 
+                    <button
                         className="flex flex-col items-center justify-center bg-gray-800 p-4 rounded-2xl flex-1"
                         onClick={handleProfileClick}
                     >

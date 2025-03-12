@@ -1,5 +1,6 @@
 import React, {useState, useEffect, useCallback, useRef} from 'react';
 import { useLocation, useNavigate } from "react-router-dom";
+import { listingsApi } from '../../services/api';
 
 const FilterBar = ({
                        initialSelectedCrypto,
@@ -13,22 +14,41 @@ const FilterBar = ({
                    }) => {
     const [selectedCrypto, setSelectedCrypto] = useState(initialSelectedCrypto);
     const [selectedCurrency, setSelectedCurrency] = useState(initialSelectedCurrency);
-    const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(initialSelectedPaymentMethod);
-    const [selectedAmount, setSelectedAmount] = useState(initialAmount);
-    // Добавляем состояние для хранения массива выбранных методов оплаты
     const [selectedPaymentMethods, setSelectedPaymentMethods] = useState([]);
+    const [selectedAmount, setSelectedAmount] = useState(initialAmount);
+    const [availableCoins, setAvailableCoins] = useState([]);
+    const [availableCurrencies, setAvailableCurrencies] = useState([]);
     const amountTimeoutRef = useRef(null);
-
 
     const navigate = useNavigate();
     const location = useLocation();
+
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const coinsResponse = await listingsApi.getCoins();
+                setAvailableCoins(coinsResponse.data);
+
+                const currenciesResponse = await listingsApi.getCurrencies();
+                setAvailableCurrencies(currenciesResponse.data);
+            } catch (error) {
+                console.error('Error fetching filter data:', error);
+            }
+        };
+
+        fetchData();
+    }, []);
 
     // Инициализируем массив выбранных методов из location.state
     useEffect(() => {
         if (location.state?.selectedPaymentMethods) {
             setSelectedPaymentMethods(location.state.selectedPaymentMethods);
+            // Notify parent component about the change
+            if (onPaymentMethodChange) {
+                onPaymentMethodChange(location.state.selectedPaymentMethods);
+            }
         }
-    }, [location.state]);
+    }, [location.state, onPaymentMethodChange]);
 
     const handlePaymentMethodChange = () => {
         navigate('/p2p/payment-method-select', {
@@ -36,18 +56,42 @@ const FilterBar = ({
                 returnPath: location.pathname,
                 selectedCrypto,
                 selectedCurrency,
-                selectedPaymentMethods, // Передаем массив выбранных методов
+                selectedPaymentMethods,
                 amountFilter: selectedAmount
             }
         });
     };
 
     const handleCurrencyChange = () => {
-        onCurrencyChange();
+        navigate('/currencies', {
+            state: {
+                returnPath: location.pathname,
+                availableCurrencies,
+                selectedCurrency,
+                onSelect: (currency) => {
+                    setSelectedCurrency(currency);
+                    if (onCurrencyChange) {
+                        onCurrencyChange(currency);
+                    }
+                }
+            }
+        });
     };
 
     const handleCryptoChange = () => {
-        onCryptoChange();
+        navigate('/coinlist', {
+            state: {
+                returnPath: location.pathname,
+                availableCoins,
+                selectedCrypto,
+                onSelect: (crypto) => {
+                    setSelectedCrypto(crypto);
+                    if (onCryptoChange) {
+                        onCryptoChange(crypto);
+                    }
+                }
+            }
+        });
     };
 
     // Оптимизированная функция изменения суммы с debounce
@@ -55,15 +99,15 @@ const FilterBar = ({
         const value = e.target.value;
         setSelectedAmount(value);
 
-        // Очищаем предыдущий таймаут, если он существует
         if (amountTimeoutRef.current) {
             clearTimeout(amountTimeoutRef.current);
         }
 
-        // Устанавливаем новый таймаут для вызова onAmountChange
         amountTimeoutRef.current = setTimeout(() => {
-            onAmountChange(value);
-        }, 300); // Задержка в 300 мс
+            if (onAmountChange) {
+                onAmountChange(value);
+            }
+        }, 300);
     }, [onAmountChange]);
 
 
@@ -142,7 +186,7 @@ const FilterBar = ({
                         <input
                             className="bg-gray-800 text-white rounded text-sm w-20 font-bold"
                             type="text"
-                            placeholder="10.00 RUB"
+                            placeholder={`10.00 ${selectedCurrency}`}
                             value={selectedAmount}
                             onChange={handleAmountChange}
                         />

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
+import { p2pApi } from '../../services/api'; // Import the API
 
 const SellPage = () => {
     const { id } = useParams();
@@ -14,24 +15,13 @@ const SellPage = () => {
     const [showDetails, setShowDetails] = useState(false);
     const [paymentDetails, setPaymentDetails] = useState('');
     const [copySuccess, setCopySuccess] = useState(false);
-
+    const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
     useEffect(() => {
         if (location.state?.listing) {
             setListing(location.state.listing);
-            // Set default payment details based on payment method
             if (location.state.listing.paymentMethods && location.state.listing.paymentMethods.length > 0) {
-                const method = location.state.listing.paymentMethods[0];
-                if (method === 'Тинькофф') {
-                    setPaymentDetails('5536 9138 2846 1294');
-                } else if (method === 'Сбербанк') {
-                    setPaymentDetails('4276 8000 1234 5678');
-                } else if (method === 'QIWI') {
-                    setPaymentDetails('+7 (999) 123-45-67');
-                } else if (method === 'ЮMoney') {
-                    setPaymentDetails('4100 1234 5678 9101');
-                } else {
-                    setPaymentDetails('Запросите реквизиты у продавца');
-                }
+                setSelectedPaymentMethod(location.state.listing.paymentMethods[0]);
+                fetchPaymentDetails(location.state.listing.paymentMethods[0]);
             }
             setLoading(false);
         } else {
@@ -41,32 +31,40 @@ const SellPage = () => {
 
     const fetchListing = async () => {
         try {
-            // In a real app, this would be a real API call
-            const response = await fetch(`/api/p2p/listings/sell/${id}`);
-            if (!response.ok) throw new Error('Failed to fetch listing');
-            const data = await response.json();
+            setLoading(true);
+            const response = await p2pApi.getAdDetails(id);
+            const data = response.data;
             setListing(data);
 
-            // Set default payment details based on payment method
             if (data.paymentMethods && data.paymentMethods.length > 0) {
-                const method = data.paymentMethods[0];
-                if (method === 'Тинькофф') {
-                    setPaymentDetails('5536 9138 2846 1294');
-                } else if (method === 'Сбербанк') {
-                    setPaymentDetails('4276 8000 1234 5678');
-                } else if (method === 'QIWI') {
-                    setPaymentDetails('+7 (999) 123-45-67');
-                } else if (method === 'ЮMoney') {
-                    setPaymentDetails('4100 1234 5678 9101');
-                } else {
-                    setPaymentDetails('Запросите реквизиты у продавца');
-                }
+                setSelectedPaymentMethod(data.paymentMethods[0]);
+                fetchPaymentDetails(data.paymentMethods[0]);
             }
         } catch (err) {
             setError('Не удалось загрузить объявление');
             console.error('Error fetching listing:', err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchPaymentDetails = async (methodName) => {
+        try {
+            // Get user's payment methods
+            const response = await p2pApi.getPaymentMethods();
+            const methods = response.data;
+
+            // Find the selected payment method
+            const method = methods.find(m => m.name === methodName && m.active);
+
+            if (method) {
+                setPaymentDetails(method.details);
+            } else {
+                setPaymentDetails('Запросите реквизиты у продавца');
+            }
+        } catch (err) {
+            console.error('Error fetching payment details:', err);
+            setPaymentDetails('Ошибка загрузки реквизитов');
         }
     };
 
@@ -103,30 +101,40 @@ const SellPage = () => {
             });
     };
 
-    const handleSell = () => {
+    const handleSell = async () => {
         if (!amount || parseFloat(amount) <= 0) {
             setError('Пожалуйста, укажите сумму');
             return;
         }
 
-        // In a real app, this would create a deal via API
-        navigate('/p2p/deals', {
-            state: {
-                newDeal: {
-                    id: Date.now(),
-                    status: 'active',
-                    type: 'sell',
-                    crypto: listing.crypto,
-                    amount: parseFloat(amount),
-                    price: listing.price,
-                    totalPrice: parseFloat(total),
-                    currency: listing.currency,
-                    counterparty: listing.user.name,
-                    date: new Date().toISOString(),
-                    paymentDetails: paymentDetails
+        try {
+            setLoading(true);
+            // Create a new deal via API
+            const dealData = {
+                adId: listing.id,
+                type: 'sell',
+                crypto: listing.crypto,
+                amount: parseFloat(amount),
+                price: listing.price,
+                totalPrice: parseFloat(total),
+                currency: listing.currency,
+                paymentMethod: selectedPaymentMethod
+            };
+
+            const response = await p2pApi.createDeal(dealData);
+
+            // Navigate to the deals page with the new deal info
+            navigate('/p2p/deals', {
+                state: {
+                    newDeal: response.data
                 }
-            }
-        });
+            });
+        } catch (err) {
+            setError(err.response?.data?.message || 'Не удалось создать сделку');
+            console.error('Error creating deal:', err);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleBack = () => {
@@ -135,6 +143,11 @@ const SellPage = () => {
 
     const toggleDetails = () => {
         setShowDetails(!showDetails);
+    };
+
+    const handlePaymentMethodChange = (method) => {
+        setSelectedPaymentMethod(method);
+        fetchPaymentDetails(method);
     };
 
     if (loading) {
@@ -157,9 +170,6 @@ const SellPage = () => {
     }
 
     const isButtonActive = amount && parseFloat(amount) > 0;
-    const selectedPaymentMethod = listing.paymentMethods && listing.paymentMethods.length > 0
-        ? listing.paymentMethods[0]
-        : 'Не указан';
 
     return (
         <div className="min-h-screen bg-gray-900 p-4 pb-20">
@@ -181,9 +191,9 @@ const SellPage = () => {
             {/* Main Card */}
             <div className="bg-gray-800 p-4 rounded-lg mb-4">
                 <div className="flex items-center mb-4">
-                    <span className="text-sm">
-                        Вы продаете <span className="font-bold">{listing.user.name}</span>
-                    </span>
+          <span className="text-sm">
+            Вы продаете <span className="font-bold">{listing.user.name}</span>
+          </span>
                 </div>
 
                 <div className="mb-4">
@@ -195,8 +205,8 @@ const SellPage = () => {
                         className="w-full bg-transparent text-5xl font-bold focus:outline-none"
                     />
                     <span className="text-3xl text-gray-500 ml-2">
-                        {listing.crypto}
-                    </span>
+            {listing.crypto}
+          </span>
                 </div>
 
                 <div className="text-gray-500 mb-4">
@@ -212,9 +222,23 @@ const SellPage = () => {
 
                 <div className="flex items-center justify-between mb-4">
                     <span className="text-md">Метод оплаты</span>
-                    <span className="text-blue-600">
-                        {selectedPaymentMethod}
-                    </span>
+                    {listing.paymentMethods && listing.paymentMethods.length > 1 ? (
+                        <select
+                            className="bg-gray-700 text-white rounded p-1"
+                            value={selectedPaymentMethod}
+                            onChange={(e) => handlePaymentMethodChange(e.target.value)}
+                        >
+                            {listing.paymentMethods.map((method, index) => (
+                                <option key={index} value={method}>
+                                    {method}
+                                </option>
+                            ))}
+                        </select>
+                    ) : (
+                        <span className="text-blue-600">
+              {selectedPaymentMethod || 'Не указан'}
+            </span>
+                    )}
                 </div>
 
                 <div className="w-full border-b border-gray-600 opacity-50 mb-4"></div>
@@ -227,6 +251,7 @@ const SellPage = () => {
                             <span className="text-green-500 text-sm">Скопировано!</span>
                         )}
                     </div>
+
                     <div className="bg-gray-700 p-3 rounded-lg flex items-center justify-between">
                         <span className="text-white font-mono">{paymentDetails}</span>
                         <button
@@ -243,16 +268,13 @@ const SellPage = () => {
                 <div className="flex items-center justify-between mb-4">
                     <span className="text-md">Лимиты</span>
                     <span className="text-gray-500">
-                        {listing.minAmount || '0'} ~ {listing.maxAmount || 'неограничено'} {listing.currency}
-                    </span>
+            {listing.minAmount || '0'} ~ {listing.maxAmount || 'неограничено'} {listing.currency}
+          </span>
                 </div>
 
                 <div className="w-full border-b border-gray-600 opacity-50 mb-4"></div>
 
-                <div
-                    className="text-md mb-2 flex items-center justify-between cursor-pointer"
-                    onClick={toggleDetails}
-                >
+                <div className="text-md mb-2 flex items-center justify-between cursor-pointer" onClick={toggleDetails}>
                     Детали объявления
                     <i className={`fas fa-chevron-${showDetails ? 'down' : 'right'} ml-2 mr-2`}></i>
                 </div>
@@ -281,23 +303,30 @@ const SellPage = () => {
             <div className="flex items-center text-yellow-500 text-sm mb-4">
                 <i className="fas fa-exclamation-triangle mr-2"></i>
                 <span>
-                    Только мошенники предлагают общение и проведение сделок вне P2P Маркета.
-                </span>
+          Только мошенники предлагают общение и проведение сделок вне P2P Маркета.
+        </span>
             </div>
 
             {/* Action Button */}
             <button
                 onClick={handleSell}
-                disabled={!isButtonActive}
+                disabled={!isButtonActive || loading}
                 className={`w-full py-3 rounded-lg fixed bottom-4 left-4 right-4 ${
-                    isButtonActive
+                    isButtonActive && !loading
                         ? 'bg-red-600 hover:bg-red-700 text-white'
                         : 'bg-gray-700 text-gray-500 cursor-not-allowed'
                 }`}
             >
-                {isButtonActive
-                    ? `Продать ${amount} ${listing.crypto} за ${total} ${listing.currency}`
-                    : 'Введите сумму для продажи'}
+                {loading ? (
+                    <span className="flex items-center justify-center">
+            <div className="animate-spin h-5 w-5 mr-2 border-2 border-white border-t-transparent rounded-full"></div>
+            Обработка...
+          </span>
+                ) : (
+                    isButtonActive
+                        ? `Продать ${amount} ${listing.crypto} за ${total} ${listing.currency}`
+                        : 'Введите сумму для продажи'
+                )}
             </button>
         </div>
     );

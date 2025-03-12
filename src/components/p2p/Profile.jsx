@@ -17,25 +17,30 @@ const Profile = () => {
     const fetchProfile = async () => {
         try {
             setLoading(true);
+            setError(null);
             const response = await p2pApi.getUserProfile();
             setProfile(response.data);
-            setLoading(false);
         } catch (err) {
-            setError('Не удалось загрузить профиль');
+            setError('Не удалось загрузить профиль. ' + (err.response?.data?.message || err.message));
             console.error('Error fetching profile:', err);
+        } finally {
             setLoading(false);
         }
     };
 
     const fetchActiveDeals = async () => {
         try {
-            setLoading(true);
             const response = await p2pApi.getUserDeals();
+
+            if (!response.data || !Array.isArray(response.data)) {
+                throw new Error('Unexpected response format');
+            }
+
             const deals = response.data.filter((deal) => deal.status === 'active');
             setActiveDeals(deals);
-            setLoading(false);
         } catch (err) {
             console.error('Error fetching active deals:', err);
+            setError(prev => prev || 'Не удалось загрузить активные сделки');
         }
     };
 
@@ -69,10 +74,8 @@ const Profile = () => {
                 <div className="flex items-center justify-between mb-4">
                     <div>
                         <h2 className="text-xl font-bold">{profile?.name}</h2>
-                        <p className="text-gray-400">На платформе с {profile?.joinDate}</p>
                     </div>
                 </div>
-
                 <div className="bg-gray-700 rounded-lg p-3 text-center">
                     <div className="text-xl font-bold">{profile?.completedDeals}</div>
                     <div className="text-sm text-gray-400">Сделок</div>
@@ -115,29 +118,28 @@ const Profile = () => {
             <div className="bg-gray-800 rounded-xl p-6 mb-6">
                 <div className="flex justify-between items-center mb-4">
                     <h3 className="font-bold">Активные сделки</h3>
-                    <button 
+                    <button
                         className="text-blue-400 text-sm"
                         onClick={() => navigate('/p2p/deals')}
                     >
                         Все сделки
                     </button>
                 </div>
-
                 {activeDeals.length > 0 ? (
                     <div className="space-y-3">
                         {activeDeals.map((deal) => (
-                            <div 
-                                key={deal.id} 
+                            <div
+                                key={deal.id}
                                 className="bg-gray-700 p-3 rounded-lg cursor-pointer hover:bg-gray-600 transition-colors"
                                 onClick={() => handleDealClick(deal.id)}
                             >
                                 <div className="flex justify-between items-start mb-2">
                                     <div>
-                                        <span className={`text-xs px-2 py-0.5 rounded mr-2 ${
-                                            deal.type === 'buy' ? 'bg-green-800 text-green-200' : 'bg-red-800 text-red-200'
-                                        }`}>
-                                            {deal.type === 'buy' ? 'Покупка' : 'Продажа'}
-                                        </span>
+                    <span className={`text-xs px-2 py-0.5 rounded mr-2 ${
+                        deal.type === 'buy' ? 'bg-green-800 text-green-200' : 'bg-red-800 text-red-200'
+                    }`}>
+                      {deal.type === 'buy' ? 'Покупка' : 'Продажа'}
+                    </span>
                                         <span className="font-medium">{deal.crypto}</span>
                                     </div>
                                     <div className="text-sm text-gray-400">
@@ -155,7 +157,7 @@ const Profile = () => {
                                     </div>
                                     <div className="flex justify-between">
                                         <span className="text-gray-400">Контрагент:</span>
-                                        <span>{deal.counterparty}</span>
+                                        <span>{deal.counterparty.name}</span> {/* Fixed line */}
                                     </div>
                                 </div>
                                 <div className="mt-2 pt-2 border-t border-gray-600 text-sm text-gray-400">

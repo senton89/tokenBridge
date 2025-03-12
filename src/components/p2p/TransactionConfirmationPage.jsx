@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
+import { p2pApi } from '../../services/api'; // Import the API
 
 const TransactionPage = () => {
     const { id } = useParams();
@@ -7,7 +8,7 @@ const TransactionPage = () => {
     const navigate = useNavigate();
 
     const [listing, setListing] = useState(null);
-    const [timeLeft, setTimeLeft] = useState(176); // 2:56 in seconds
+    const [timeLeft, setTimeLeft] = useState(300);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
@@ -30,13 +31,12 @@ const TransactionPage = () => {
         return () => clearTimeout(timer);
     }, [timeLeft]);
 
+
     const fetchListing = async () => {
         try {
-            // In a real app, this would be an API call
-            const response = await fetch(`/api/p2p/listings/${id}`);
-            if (!response.ok) throw new Error('Failed to fetch listing');
-            const data = await response.json();
-            setListing(data);
+            setLoading(true);
+            const response = await p2pApi.getAdDetails(id);
+            setListing(response.data);
         } catch (err) {
             setError('Не удалось загрузить данные объявления');
             console.error('Error fetching listing:', err);
@@ -51,30 +51,28 @@ const TransactionPage = () => {
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
-    const handleCreateDeal = () => {
-        navigate(`/p2p/payment-confirmation`, {
-            state: {
-                newDeal: {
-                    id: Date.now(),
-                    status: 'active',
-                    type: listing.type === 'buy' ? 'sell' : 'buy',
-                    crypto: listing.crypto,
-                    amount: location.state?.amount || 10.085728,
-                    price: listing.price,
-                    totalPrice: location.state?.total || 1000,
-                    currency: listing.currency,
-                    counterparty: {
-                        name: listing.user.name,
-                        avatar: listing.user.avatar,
-                        deals: listing.user.deals,
-                        rating: listing.user.rating
-                    },
-                    paymentMethod: listing.paymentMethods[0],
-                    date: new Date().toISOString()
+    const handleCreateDeal = async () => {
+        try {
+            const dealData = {
+                adId: id,
+                amount: location.state?.amount || 10.085728,
+                totalPrice: location.state?.total || 1000,
+                paymentMethod: listing.paymentMethods[0]
+            };
+
+            const response = await p2pApi.createDeal(dealData);
+
+            navigate(`/p2p/payment-confirmation`, {
+                state: {
+                    newDeal: response.data
                 }
-            }
-        });
+            });
+        } catch (err) {
+            setError(err.response?.data?.message || 'Не удалось создать сделку');
+            console.error('Error creating deal:', err);
+        }
     };
+
 
     if (loading) {
         return (

@@ -8,6 +8,7 @@ const AdDetailsPage = () => {
     const [ad, setAd] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [actionLoading, setActionLoading] = useState(false);
 
     useEffect(() => {
         fetchAd();
@@ -18,6 +19,7 @@ const AdDetailsPage = () => {
             setLoading(true);
             const response = await p2pApi.getAdDetails(id);
             setAd(response.data);
+            setError(null);
         } catch (err) {
             setError('Не удалось загрузить объявление');
             console.error('Error fetching ad:', err);
@@ -32,12 +34,16 @@ const AdDetailsPage = () => {
 
     const handleToggleStatus = async () => {
         try {
-            await p2pApi.updateAdStatus(id, ad.status === 'active' ? 'inactive' : 'active');
+            setActionLoading(true);
+            const newStatus = ad.status === 'active' ? 'inactive' : 'active';
+            await p2pApi.updateAdStatus(id, newStatus);
             // Refresh ad data
             await fetchAd();
         } catch (err) {
             setError('Не удалось обновить статус объявления');
             console.error('Error updating ad status:', err);
+        } finally {
+            setActionLoading(false);
         }
     };
 
@@ -47,11 +53,14 @@ const AdDetailsPage = () => {
             return;
         }
         try {
+            setActionLoading(true);
             await p2pApi.deleteAd(id);
             navigate('/p2p/my-ads');
         } catch (err) {
             setError('Не удалось удалить объявление');
             console.error('Error deleting ad:', err);
+        } finally {
+            setActionLoading(false);
         }
     };
 
@@ -114,19 +123,23 @@ const AdDetailsPage = () => {
                     <div className="flex space-x-2">
                         <button
                             onClick={handleEdit}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                            disabled={actionLoading}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
                         >
                             <i className="fas fa-edit" />
                         </button>
                         <button
                             onClick={handleToggleStatus}
-                            className={`px-4 py-2 rounded-lg ${
+                            disabled={actionLoading}
+                            className={`px-4 py-2 rounded-lg disabled:opacity-50 ${
                                 ad.status === 'active'
                                     ? 'bg-yellow-600 hover:bg-yellow-700'
                                     : 'bg-green-600 hover:bg-green-700'
                             }`}
                         >
-                            {ad.status === 'active' ? (
+                            {actionLoading ? (
+                                <i className="fas fa-spinner fa-spin" />
+                            ) : ad.status === 'active' ? (
                                 <i className="fas fa-pause" />
                             ) : (
                                 <i className="fas fa-play" />
@@ -134,12 +147,14 @@ const AdDetailsPage = () => {
                         </button>
                         <button
                             onClick={handleDelete}
-                            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                            disabled={actionLoading}
+                            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
                         >
-                            <i className="fas fa-trash" />
+                            {actionLoading ? <i className="fas fa-spinner fa-spin" /> : <i className="fas fa-trash" />}
                         </button>
                     </div>
                 </div>
+
                 <div className="grid grid-cols-2 gap-4 text-sm">
                     <div className="space-y-2">
                         <div>
@@ -176,7 +191,7 @@ const AdDetailsPage = () => {
             <div className="bg-gray-800 rounded-xl p-4 mb-6">
                 <h3 className="font-medium mb-3">Способы оплаты</h3>
                 <div className="grid grid-cols-2 gap-3">
-                    {ad.paymentMethods.map((method, index) => (
+                    {ad.paymentMethods && ad.paymentMethods.map((method, index) => (
                         <div
                             key={index}
                             className="bg-gray-700 rounded-lg px-4 py-2 text-sm"
@@ -200,15 +215,15 @@ const AdDetailsPage = () => {
             {/* Stats */}
             <div className="mt-6 grid grid-cols-3 gap-4">
                 <div className="bg-gray-800 rounded-xl p-4 text-center">
-                    <div className="text-xl font-bold">{ad.views}</div>
+                    <div className="text-xl font-bold">{ad.views || 0}</div>
                     <div className="text-sm text-gray-400">Просмотров</div>
                 </div>
                 <div className="bg-gray-800 rounded-xl p-4 text-center">
-                    <div className="text-xl font-bold">{ad.completedDeals}</div>
+                    <div className="text-xl font-bold">{ad.completedDeals || 0}</div>
                     <div className="text-sm text-gray-400">Сделок</div>
                 </div>
                 <div className="bg-gray-800 rounded-xl p-4 text-center">
-                    <div className="text-xl font-bold">{ad.successRate}%</div>
+                    <div className="text-xl font-bold">{ad.successRate || 0}%</div>
                     <div className="text-sm text-gray-400">Успешных</div>
                 </div>
             </div>

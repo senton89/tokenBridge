@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { p2pApi } from '../../services/api';
 
 const DealDetailsPage = () => {
     const { id } = useParams();
@@ -30,10 +31,8 @@ const DealDetailsPage = () => {
     const fetchDeal = async () => {
         try {
             setLoading(true);
-            const response = await fetch(`/api/p2p/deals/${id}`);
-            if (!response.ok) throw new Error('Failed to fetch deal');
-
-            const data = await response.json();
+            const response = await p2pApi.getDealDetails(id);
+            const data = response.data;
             setDeal(data);
 
             // If deal is active, calculate time left for payment
@@ -80,12 +79,7 @@ const DealDetailsPage = () => {
     // Handle confirming payment (for buyer)
     const handleConfirmPayment = async () => {
         try {
-            const response = await fetch(`/api/p2p/deals/${id}/confirm-payment`, {
-                method: 'PUT'
-            });
-
-            if (!response.ok) throw new Error('Failed to confirm payment');
-
+            await p2pApi.confirmPayment(id);
             // Refresh deal data
             await fetchDeal();
         } catch (err) {
@@ -97,12 +91,7 @@ const DealDetailsPage = () => {
     // Handle releasing crypto (for seller)
     const handleReleaseCrypto = async () => {
         try {
-            const response = await fetch(`/api/p2p/deals/${id}/release`, {
-                method: 'PUT'
-            });
-
-            if (!response.ok) throw new Error('Failed to release crypto');
-
+            await p2pApi.releaseCrypto(id);
             // Refresh deal data
             await fetchDeal();
         } catch (err) {
@@ -118,17 +107,28 @@ const DealDetailsPage = () => {
         }
 
         try {
-            const response = await fetch(`/api/p2p/deals/${id}/cancel`, {
-                method: 'PUT'
-            });
+            const reason = prompt('Укажите причину отмены сделки:');
+            if (reason === null) return; // User cancelled the prompt
 
-            if (!response.ok) throw new Error('Failed to cancel deal');
-
+            await p2pApi.cancelDeal(id, reason);
             // Refresh deal data
             await fetchDeal();
         } catch (err) {
             setError('Не удалось отменить сделку');
             console.error('Error cancelling deal:', err);
+        }
+    };
+
+    const handleCreateAppeal = async () => {
+        try {
+            const reason = prompt('Укажите причину апелляции:');
+            if (reason === null) return; // User cancelled the prompt
+
+            await p2pApi.createAppeal(id, reason);
+            alert('Апелляция создана успешно');
+        } catch (err) {
+            setError('Не удалось создать апелляцию');
+            console.error('Error creating appeal:', err);
         }
     };
 
@@ -158,40 +158,28 @@ const DealDetailsPage = () => {
 
     const getStatusColor = (status) => {
         switch (status) {
-            case 'active':
-                return 'text-yellow-500';
-            case 'completed':
-                return 'text-green-500';
-            case 'cancelled':
-                return 'text-red-500';
-            default:
-                return 'text-gray-500';
+            case 'active': return 'text-yellow-500';
+            case 'completed': return 'text-green-500';
+            case 'cancelled': return 'text-red-500';
+            default: return 'text-gray-500';
         }
     };
 
     const getStatusIcon = (status) => {
         switch (status) {
-            case 'active':
-                return 'fa-clock';
-            case 'completed':
-                return 'fa-check-circle';
-            case 'cancelled':
-                return 'fa-times-circle';
-            default:
-                return 'fa-question-circle';
+            case 'active': return 'fa-clock';
+            case 'completed': return 'fa-check-circle';
+            case 'cancelled': return 'fa-times-circle';
+            default: return 'fa-question-circle';
         }
     };
 
     const getStatusText = (status) => {
         switch (status) {
-            case 'active':
-                return 'В процессе';
-            case 'completed':
-                return 'Завершена';
-            case 'cancelled':
-                return 'Отменена';
-            default:
-                return 'Неизвестно';
+            case 'active': return 'В процессе';
+            case 'completed': return 'Завершена';
+            case 'cancelled': return 'Отменена';
+            default: return 'Неизвестно';
         }
     };
 
@@ -206,10 +194,7 @@ const DealDetailsPage = () => {
                         </h2>
                         <p className="text-gray-400">Детали сделки</p>
                     </div>
-                    <button
-                        onClick={handleBack}
-                        className="text-gray-400 hover:text-white"
-                    >
+                    <button onClick={handleBack} className="text-gray-400 hover:text-white">
                         <i className="fas fa-times text-xl" />
                     </button>
                 </div>
@@ -335,6 +320,14 @@ const DealDetailsPage = () => {
                             </button>
                         </>
                     )}
+
+                    {/* Add appeal button */}
+                    <button
+                        onClick={handleCreateAppeal}
+                        className="w-full py-3 bg-red-600 hover:bg-red-700 rounded-xl font-medium"
+                    >
+                        Создать апелляцию
+                    </button>
                 </div>
             )}
 

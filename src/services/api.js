@@ -1,7 +1,8 @@
 import axios from 'axios';
 
 // Базовый URL для API
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || '/api';
+// const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || '/api';
+const API_BASE_URL = 'http://localhost:3001/api';
 
 // Создаем экземпляр axios с базовым URL
 const api = axios.create({
@@ -149,6 +150,9 @@ export const p2pApi = {
 //     message: 'Статус объявления успешно изменен'
 //   }
 // }
+
+
+    getUserAds: () => api.get('/p2p/user-ads'),
 
     // Получение сделок пользователя
     getUserDeals: () => api.get('/p2p/deals'),
@@ -325,7 +329,7 @@ export const walletApi = {
 // }
 
     // Получение адреса для депозита
-    getDepositAddress: (currency) => api.get(`/wallet/deposit/${currency}`),
+    getDepositAddress: (currency) => api.get(`/wallet/deposit-address/${currency}`),
 
     // Пример ответа:
 // {
@@ -399,7 +403,7 @@ export const walletApi = {
 // Market API
 export const marketApi = {
     // Получение курсов валют
-    getPrices: (currencies) => api.get('/market/prices', { params: { currencies } }),
+    getPrices: (currency) => api.get('/market/prices', { params: { currency } }),
 
     // Пример ответа:
 // {
@@ -452,7 +456,7 @@ export const marketApi = {
 
 export const listingsApi = {
     // Получение объявлений
-    getCoins: () => api.get('/coins', ),
+    getCoins: () => api.get('/coins', ), //протестировано
 
     // Пример ответа:
 // {
@@ -468,7 +472,7 @@ export const listingsApi = {
 //   ]
 // }
 
-    getCurrencies: () => api.get('/currencies', ),
+    getCurrencies: () => api.get('/currencies', ), //протестировано
 // Пример ответа:
 // {
 //   data: [

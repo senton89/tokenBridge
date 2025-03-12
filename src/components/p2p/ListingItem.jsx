@@ -1,5 +1,5 @@
 import React from 'react';
-import { getCryptoImagePath, handleImageError, getCryptoColor } from '../../utils/imageHelper';
+import { getCryptoImagePath, handleImageError } from '../../utils/imageHelper';
 
 const ListingItem = ({ listing, buttonType, onClick }) => {
     const {
@@ -32,13 +32,12 @@ const ListingItem = ({ listing, buttonType, onClick }) => {
         >
             <div className="flex justify-between items-start mb-3">
                 <div className="flex items-center">
-
-                        <img
-                            src={getCryptoImagePath(crypto)}
-                            alt={crypto}
-                            className="w-10 h-10 mr-3"
-                            onError={handleImageError}
-                        />
+                    <img
+                        src={getCryptoImagePath(crypto)}
+                        alt={crypto}
+                        className="w-10 h-10 mr-3"
+                        onError={handleImageError}
+                    />
                     <div>
                         <div className="text-xl font-bold">{price} {currency}</div>
                         <div className="text-sm text-gray-400">
@@ -56,7 +55,6 @@ const ListingItem = ({ listing, buttonType, onClick }) => {
                     {buttonType === 'buy' ? 'Купить' : 'Продать'}
                 </button>
             </div>
-
             <div className="flex items-center mb-3">
                 <div>
                     <div className="font-medium">{user?.name}</div>
@@ -65,7 +63,6 @@ const ListingItem = ({ listing, buttonType, onClick }) => {
                     </div>
                 </div>
             </div>
-
             <div className="grid grid-cols-2 gap-2 text-sm text-gray-400 mt-2">
                 <div className="flex items-center">
                     <i className="fas fa-wallet mr-2 text-gray-500" />
@@ -73,7 +70,10 @@ const ListingItem = ({ listing, buttonType, onClick }) => {
                 </div>
                 <div className="flex items-center">
                     <i className="fas fa-credit-card mr-2 text-gray-500" />
-                    <span>{paymentMethods?.slice(0, 2).join(', ')}{paymentMethods?.length > 2 ? ` +${paymentMethods.length - 2}` : ''}</span>
+                    <span>
+            {paymentMethods?.slice(0, 2).join(', ')}
+                        {paymentMethods?.length > 2 ? ` +${paymentMethods.length - 2}` : ''}
+          </span>
                 </div>
             </div>
         </div>

@@ -8,7 +8,7 @@ import DepositPage from "./components/deposit/DepositPage";
 import ExchangePage from "./components/exchange/ExchangePage";
 import WithdrawPage from "./components/withdraw/WithdrawPage";
 import P2PMenu from "./components/p2p/P2PMenu";
-import SettingsPage from "./components/SettingsPage";
+// import SettingsPage from "./components/SettingsPage";
 import BuyMenu from "./components/p2p/BuyMenu";
 import BuyPage from "./components/p2p/BuyPage.jsx";
 import SellMenu from "./components/p2p/SellMenu";
@@ -23,6 +23,9 @@ import PaymentMethodSelector from "./components/p2p/PaymentMethodSelector";
 import DealDetailsPage from "./components/p2p/DealDetailsPage";
 import PaymentConfirmationPage from "./components/p2p/PaymentConfirmationPage";
 import TransactionPage from "./components/p2p/TransactionConfirmationPage";
+import ExchangeSuccessPage from "./components/exchange/ExchangeSuccessPage";
+import Settings from "./components/Settings";
+import CoinMenu from "./components/CoinMenu";
 
 function App() {
     const navigate = useNavigate();
@@ -61,9 +64,14 @@ function App() {
           <Route path="/coinlist" element={<CoinList/>} />
           <Route path="/deposit" element={<DepositPage/>} />
           <Route path="/exchange" element={<ExchangePage/>} />
+          <Route path="/exchange/success" element={<ExchangeSuccessPage/>} />
           <Route path="/withdraw" element={<WithdrawPage/>} />
-          <Route path="/settings" element={<SettingsPage/>} />
-          
+          <Route path="/settings" element={<Settings/>} />
+          <Route path="/policy/aml" element={<Settings/>} />
+          <Route path="/policy/privacy" element={<Settings/>} />
+          <Route path="/support" element={<Settings/>} />
+          <Route path="/coin/:symbol" element={<CoinMenu/>} />
+
           {/* P2P маршруты */}
           <Route path="/p2p" element={<P2PMenu/>} />
           <Route path="/p2p/buy" element={<BuyMenu/>} />
