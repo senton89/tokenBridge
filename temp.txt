@@ -1,73 +1,56 @@
-import { pgPool } from "../database/db.js";
-import { getCoinsFromRedis } from '../database/dbContext.js';
-import bitcoin from 'bitcoinjs-lib';
-import bip39 from 'bip39';
-import Web3 from 'web3';
-import TonWeb from 'tonweb';
-import { Connection, Keypair } from '@solana/web3.js';
-import TronWeb from 'tronweb';
-import * as dogecoin from 'dogecoinjs-lib';
+-- Create coins table
+CREATE TABLE IF NOT EXISTS coins (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  symbol VARCHAR(20) NOT NULL UNIQUE,
+  logo VARCHAR(255),
+  network VARCHAR(50),
+  coingecko_id VARCHAR(100)
+);
 
-// Функция для создания кошельков
-async function createWallets(userId) {
-    const wallets = {};
+-- Create currencies table
+CREATE TABLE IF NOT EXISTS currencies (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  symbol VARCHAR(10) NOT NULL UNIQUE,
+  description TEXT,
+  icon VARCHAR(10)
+);
 
-    // TON
-    const mnemonic = bip39.generateMnemonic();
-    const seed = await bip39.mnemonicToSeed(mnemonic);
-    const root = bitcoin.bip32.fromSeed(seed);
-    const path = "m/44'/0'/0'/0/0";
-    const child = root.derivePath(path);
-    const tonWeb = new TonWeb();
-    const tonKeyPair = tonWeb.utils.newKeyPair();
-    wallets.TON = {
-        address: tonWeb.utils.Address.toString(tonKeyPair.publicKey),
-        privateKey: tonKeyPair.secretKey,
-    };
+-- Create users table
+CREATE TABLE IF NOT EXISTS users (
+  id SERIAL PRIMARY KEY,
+  telegram_id BIGINT UNIQUE,
+  created_at TIMESTAMP DEFAULT NOW()
+);
 
-    // Tether (USDT) на блокчейне TON
-    const usdtTonKeyPair = tonWeb.utils.newKeyPair();
-    wallets.USDT = {
-        address: tonWeb.utils.Address.toString(usdtTonKeyPair.publicKey),
-        privateKey: usdtTonKeyPair.secretKey,
-    };
+-- Create user balances table
+CREATE TABLE IF NOT EXISTS user_balances (
+  user_id INTEGER REFERENCES users(id),
+  coin_id INTEGER REFERENCES coins(id),
+  balance DECIMAL(24, 8) DEFAULT 0,
+  PRIMARY KEY (user_id, coin_id)
+);
 
-    // NOT на блокчейне TON
-    const notTonKeyPair = tonWeb.utils.newKeyPair();
-    wallets.NOT = {
-        address: tonWeb.utils.Address.toString(notTonKeyPair.publicKey),
-        privateKey: notTonKeyPair.secretKey,
-    };
+-- Create transactions table
+CREATE TABLE IF NOT EXISTS transactions (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id),
+  coin_id INTEGER REFERENCES coins(id),
+  amount DECIMAL(24, 8) NOT NULL,
+  type VARCHAR(20) NOT NULL,
+  status VARCHAR(20) DEFAULT 'completed',
+  timestamp TIMESTAMP DEFAULT NOW(),
+  tx_hash VARCHAR(255)
+);
 
-    // Bitcoin (BTC)
-    const btcMnemonic = bip39.generateMnemonic();
-    const btcSeed = await bip39.mnemonicToSeed(btcMnemonic);
-    const btcRoot = bitcoin.bip32.fromSeed(btcSeed);
-    const btcPath = "m/44'/0'/0'/0/0";
-    const btcChild = btcRoot.derivePath(btcPath);
-    const { address } = bitcoin.payments.p2pkh({ pubkey: btcChild.publicKey });
-    wallets.BTC = {
-        address: address,
-        privateKey: btcChild.toWIF(),
-    };
+-- Create exchange rates table
+CREATE TABLE IF NOT EXISTS exchange_rates (
+  from_coin_id INTEGER REFERENCES coins(id),
+  to_coin_id INTEGER REFERENCES coins(id),
+  rate DECIMAL(24, 8) NOT NULL,
+  last_updated TIMESTAMP DEFAULT NOW(),
+  PRIMARY KEY (from_coin_id, to_coin_id)
+);
 
-    // Ethereum (ETH)
-    const ethMnemonic = bip39.generateMnemonic();
-    const ethSeed = await bip39.mnemonicToSeed(ethMnemonic);
-    const ethRoot = bitcoin.bip32.fromSeed(ethSeed);
-    const ethPath = "m/44'/60'/0'/0/0";
-    const ethChild = ethRoot.derivePath(ethPath);
-    const ethAccount = new Web3.eth.accounts.privateKeyToAccount(ethChild.toWIF());
-    wallets.ETH = {
-        address: ethAccount.address,
-        privateKey: ethAccount.privateKey,
-    };
-
-    // Solana (SOL)
-    const solanaMnemonic = bip39.generateMnemonic();
-    const solanaSeed = await bip39.mnemonicToSeed(solanaMnemonic);
-    const solanaRoot = bitcoin.bip32.fromSeed(solanaSeed);
-    const solanaPath = "m/44'/501'/0'/0/0";
-    const solanaChild = solanaRoot.derivePath(solanaPath);
-    const solanaKeyPair = Keypair.fromSecretKey(solanaChild.toWIF());
-    wallets.SOL
+у меня есть файл api.js, который отражает запросы к серверу и заготовки и файлы сервера, давай доработаем его до конечно работающего бэкенда и соединим через апи, начнем с функций которые не взаимодействуют с блокчейном, а только с базой данных или кэшем. Можешь не использовать все файлы и сказать, которые абсолютно не нужны

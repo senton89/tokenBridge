@@ -209,7 +209,7 @@ async function getUserTransactions(userId) {
 
 // Получить все курсы обмена с кэшированием
 async function getAllExchangeRates() {
-    const cacheKey = 'exchange_rates:all';
+    const cacheKey = 'exchange_rates';
     const cachedRates = await redisClient.get(cacheKey);
 
     if (cachedRates) {

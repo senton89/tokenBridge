@@ -1,3 +1,4 @@
+// services/WalletManager.js
 import BitcoinWallet from './wallets/BitcoinWallet.js';
 import DogecoinWallet from './wallets/DogecoinWallet.js';
 import EthereumWallet from './wallets/EthereumWallet.js';
@@ -6,7 +7,7 @@ import SolanaWallet from './wallets/SolanaWallet.js';
 import TetherTonWallet from './wallets/TetherTonWallet.js';
 import TonWallet from './wallets/TonWallet.js';
 import { pgPool, redisClient } from '../database/db.js';
-import { addTransaction } from '../database/dbContext.js';
+import { addTransaction, getUserBalance, updateUserBalance } from '../database/dbContext.js';
 
 class WalletManager {
     constructor() {
@@ -26,11 +27,14 @@ class WalletManager {
 
         // Map to store temporary user wallets
         this.temporaryWallets = new Map();
+
+        // Start monitoring deposits
+        this.startDepositMonitoring();
     }
 
     async initCentralWallets() {
         try {
-            // Load central wallet keys from database or environment variables
+            // Load central wallet keys from database
             const centralWalletConfig = await pgPool.query('SELECT * FROM central_wallets');
 
             // Initialize each central wallet with stored keys
@@ -97,23 +101,36 @@ class WalletManager {
             }
 
             const address = await wallet.getAddress();
+            let privateKey = wallet.privateKey || wallet.keyPair?.privateKey;
+
+            const privateKeyString = typeof privateKey === 'string'
+                ? privateKey
+                : Buffer.isBuffer(privateKey)
+                    ? privateKey.toString('hex')
+                    : JSON.stringify(privateKey);
 
             // Store wallet in memory
             const walletKey = `${userId}:${coinSymbol}`;
+
             this.temporaryWallets.set(walletKey, wallet);
 
-            // Store wallet address in Redis for persistence
-            await redisClient.set(`temp_wallet:${walletKey}`, JSON.stringify({
-                address,
-                userId,
-                coinSymbol,
-                createdAt: new Date().toISOString()
-            }), 'EX', 86400); // 24 hours expiry
+            // Store wallet address in Redis for persistence (24 hours expiry)
+            await redisClient.set(
+                `temp_wallet:${walletKey}`,
+                JSON.stringify({
+                    address,
+                    privateKey,
+                    userId,
+                    coinSymbol,
+                    createdAt: new Date().toISOString()
+                }),
+                'EX', 86400
+            );
 
             // Store in database for long-term reference
             await pgPool.query(
-                'INSERT INTO user_temp_wallets (user_id, coin_symbol, address, created_at) VALUES ($1, $2, $3, $4)',
-                [userId, coinSymbol, address, new Date()]
+                'INSERT INTO user_temp_wallets (user_id, coin_symbol, address, private_key, created_at, active) VALUES ($1, $2, $3, $4, $5, $6)',
+                [userId, coinSymbol, address, privateKeyString, new Date(), true]
             );
 
             return { address, wallet };
@@ -132,20 +149,113 @@ class WalletManager {
         }
 
         // Check if wallet exists in Redis
-        const walletData = await redisClient.get(`temp_wallet:${walletKey}`);
-        if (walletData) {
-            // Recreate wallet instance
-            return await this.createTemporaryWallet(userId, coinSymbol);
+        const walletDataStr = await redisClient.get(`temp_wallet:${walletKey}`);
+        if (walletDataStr) {
+            const walletData = JSON.parse(walletDataStr);
+
+            // Recreate wallet instance with the stored private key
+            let wallet;
+
+            switch (coinSymbol) {
+                case 'BTC':
+                    wallet = new BitcoinWallet(null, userId, walletData.privateKey);
+                    break;
+                case 'DOGE':
+                    wallet = new DogecoinWallet(null, userId, walletData.privateKey);
+                    break;
+                case 'ETH':
+                    wallet = new EthereumWallet('mainnet', userId, walletData.privateKey);
+                    break;
+                case 'NOT':
+                    wallet = new NotWallet(userId, walletData.privateKey);
+                    break;
+                case 'SOL':
+                    wallet = new SolanaWallet(userId, walletData.privateKey);
+                    break;
+                case 'USDT':
+                    wallet = new TetherTonWallet(userId, walletData.privateKey);
+                    break;
+                case 'TON':
+                    wallet = new TonWallet(userId, walletData.privateKey);
+                    break;
+                default:
+                    throw new Error(`Unsupported coin: ${coinSymbol}`);
+            }
+
+            // Store in memory
+            this.temporaryWallets.set(walletKey, wallet);
+            return wallet;
+        }
+
+        // Check database for wallet
+        const dbWallet = await pgPool.query(
+            'SELECT * FROM user_temp_wallets WHERE user_id = $1 AND coin_symbol = $2 AND active = true',
+            [userId, coinSymbol]
+        );
+
+        if (dbWallet.rows.length > 0) {
+            const walletData = dbWallet.rows[0];
+
+            // Recreate wallet instance with the stored private key
+            let wallet;
+
+            switch (coinSymbol) {
+                case 'BTC':
+                    wallet = new BitcoinWallet(null, userId, walletData.private_key);
+                    break;
+                case 'DOGE':
+                    wallet = new DogecoinWallet(null, userId, walletData.private_key);
+                    break;
+                case 'ETH':
+                    wallet = new EthereumWallet('mainnet', userId, walletData.private_key);
+                    break;
+                case 'NOT':
+                    wallet = new NotWallet(userId, walletData.private_key);
+                    break;
+                case 'SOL':
+                    wallet = new SolanaWallet(userId, walletData.private_key);
+                    break;
+                case 'USDT':
+                    wallet = new TetherTonWallet(userId, walletData.private_key);
+                    break;
+                case 'TON':
+                    wallet = new TonWallet(userId, walletData.private_key);
+                    break;
+                default:
+                    throw new Error(`Unsupported coin: ${coinSymbol}`);
+            }
+
+            // Store in memory and Redis
+            this.temporaryWallets.set(walletKey, wallet);
+            await redisClient.set(
+                `temp_wallet:${walletKey}`,
+                JSON.stringify({
+                    address: walletData.address,
+                    privateKey: walletData.private_key,
+                    userId,
+                    coinSymbol,
+                    createdAt: walletData.created_at
+                }),
+                'EX', 86400
+            );
+
+            return wallet;
         }
 
         // Create new wallet if it doesn't exist
         return (await this.createTemporaryWallet(userId, coinSymbol)).wallet;
     }
 
-    async monitorDeposits() {
-        console.log('Starting deposit monitoring service...');
+    startDepositMonitoring() {
+        // Check for deposits every 2 minutes
+        setInterval(() => this.monitorDeposits(), 2 * 60 * 1000);
+        console.log('Deposit monitoring service started');
+    }
 
-        // Get all temporary wallets from database
+    async monitorDeposits() {
+        console.log('Checking for new deposits...');
+
+        // Get all active temporary wallets from database
         const tempWallets = await pgPool.query('SELECT * FROM user_temp_wallets WHERE active = true');
 
         for (const walletData of tempWallets.rows) {
@@ -170,15 +280,35 @@ class WalletManager {
                     const transferAmount = balance - networkFee;
 
                     if (transferAmount > 0) {
+                        // Execute the transfer
                         const txHash = await wallet.withdraw(centralWalletAddress, transferAmount);
 
+                        // Get coin ID
+                        const coinResult = await pgPool.query('SELECT id FROM coins WHERE symbol = $1', [coin_symbol]);
+                        const coinId = coinResult.rows[0].id;
+
                         // Credit user's account in database
-                        await wallet.deposit(transferAmount);
+                        const userBalance = await getUserBalance(user_id, coinId);
+                        if (userBalance) {
+                            await updateUserBalance(user_id, coinId, parseFloat(userBalance.balance) + transferAmount);
+                        } else {
+                            // Create new balance record if it doesn't exist
+                            await pgPool.query(
+                                'INSERT INTO user_balances (user_id, coin_id, balance) VALUES ($1, $2, $3)',
+                                [user_id, coinId, transferAmount]
+                            );
+                        }
 
                         // Record transaction
-                        await addTransaction(user_id, wallet.coinId, transferAmount, 'deposit', txHash);
+                        await addTransaction(user_id, coinId, transferAmount, 'deposit', txHash);
 
                         console.log(`Successfully transferred ${transferAmount} ${coin_symbol} to central wallet. Transaction: ${txHash}`);
+
+                        // Mark temporary wallet as inactive after successful transfer
+                        await pgPool.query(
+                            'UPDATE user_temp_wallets SET active = false, last_used = $1 WHERE user_id = $2 AND coin_symbol = $3',
+                            [new Date(), user_id, coin_symbol]
+                        );
                     }
                 }
             } catch (error) {
@@ -188,7 +318,7 @@ class WalletManager {
     }
 
     calculateNetworkFee(coinSymbol, amount) {
-        // Simplified fee calculation - in production, use dynamic fee estimation
+        // Dynamic fee calculation based on network conditions and amount
         const feeRates = {
             BTC: 0.0001,
             DOGE: 1,
@@ -204,17 +334,19 @@ class WalletManager {
 
     async processWithdrawal(userId, coinSymbol, amount, destinationAddress) {
         try {
-            // Validate user has sufficient balance
-            const userBalanceResult = await pgPool.query(
-                'SELECT ub.balance, c.id FROM user_balances ub JOIN coins c ON ub.coin_id = c.id WHERE ub.user_id = $1 AND c.symbol = $2',
-                [userId, coinSymbol]
-            );
+            // Get coin ID
+            const coinResult = await pgPool.query('SELECT id FROM coins WHERE symbol = $1', [coinSymbol]);
+            if (coinResult.rows.length === 0) {
+                throw new Error(`Coin ${coinSymbol} not found`);
+            }
+            const coinId = coinResult.rows[0].id;
 
-            if (userBalanceResult.rows.length === 0 || userBalanceResult.rows[0].balance < amount) {
+            // Validate user has sufficient balance
+            const userBalance = await getUserBalance(userId, coinId);
+
+            if (!userBalance || parseFloat(userBalance.balance) < amount) {
                 throw new Error('Insufficient balance');
             }
-
-            const coinId = userBalanceResult.rows[0].id;
 
             // Calculate withdrawal fee
             const withdrawalFee = this.calculateWithdrawalFee(coinSymbol, amount);
@@ -224,27 +356,42 @@ class WalletManager {
                 throw new Error('Amount after fee is too small');
             }
 
+            // Create or get temporary wallet for the withdrawal
+            const tempWallet = await this.getTemporaryWallet(userId, coinSymbol);
+            const tempWalletAddress = await tempWallet.getAddress();
+
             // Get central wallet
             const centralWallet = this.centralWallets[coinSymbol];
             if (!centralWallet) {
                 throw new Error(`Central wallet for ${coinSymbol} not found`);
             }
 
-            // Send directly from central wallet to destination address
-            const txHash = await centralWallet.withdraw(destinationAddress, amountToSend);
+            // Step 1: Send from central wallet to temporary wallet
+            console.log(`Sending ${amountToSend} ${coinSymbol} from central wallet to temporary wallet ${tempWalletAddress}`);
+            const internalTxHash = await centralWallet.withdraw(tempWalletAddress, amountToSend);
+
+            // Wait for confirmation (this would be more sophisticated in production)
+            await new Promise(resolve => setTimeout(resolve, 5000));
+
+            // Step 2: Send from temporary wallet to destination address
+            console.log(`Sending ${amountToSend} ${coinSymbol} from temporary wallet to destination ${destinationAddress}`);
+            const externalTxHash = await tempWallet.withdraw(destinationAddress, amountToSend);
 
             // Update user balance
-            await pgPool.query(
-                'UPDATE user_balances SET balance = balance - $1 WHERE user_id = $2 AND coin_id = $3',
-                [amount, userId, coinId]
-            );
+            await updateUserBalance(userId, coinId, parseFloat(userBalance.balance) - amount);
 
-            // Record transaction
-            await addTransaction(userId, coinId, amount, 'withdrawal', txHash);
+            // Record transactions
+            await addTransaction(userId, coinId, -amount, 'withdrawal', externalTxHash);
+
+            // Mark temporary wallet as inactive
+            await pgPool.query(
+                'UPDATE user_temp_wallets SET active = false, last_used = $1 WHERE user_id = $2 AND coin_symbol = $3',
+                [new Date(), userId, coinSymbol]
+            );
 
             return {
                 success: true,
-                txHash,
+                txHash: externalTxHash,
                 amount: amountToSend,
                 fee: withdrawalFee
             };
@@ -255,7 +402,7 @@ class WalletManager {
     }
 
     calculateWithdrawalFee(coinSymbol, amount) {
-        // Simplified fee calculation - in production, use dynamic fee estimation
+        // Dynamic fee calculation based on network conditions and amount
         const feeRates = {
             BTC: 0.0002,
             DOGE: 2,

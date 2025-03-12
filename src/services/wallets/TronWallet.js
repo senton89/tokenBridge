@@ -5,6 +5,8 @@ import axios from 'axios';
 import { pgPool } from "../../database/db.js";
 import { getCoinsFromRedis } from "../../database/dbContext.js";
 
+//Tether на троне
+
 class TronWallet extends WalletBase {
     constructor(network = 'mainnet', userId) {
         super();
